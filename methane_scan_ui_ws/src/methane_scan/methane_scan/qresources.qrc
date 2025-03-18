@@ -1,0 +1,10 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file alias="icon_PTU.svg">resources/boxes.svg</file>
+        <file alias="icon_TDLAS.svg">resources/cloud-haze2.svg</file>
+        <file alias="icon_Robot.svg">resources/ev-front.svg</file>
+        <file alias="icon_Perception.svg">resources/crosshair.svg</file>
+        <file alias="icon_Detection.svg">resources/eye.svg</file>
+    </qresource>
+</RCC>

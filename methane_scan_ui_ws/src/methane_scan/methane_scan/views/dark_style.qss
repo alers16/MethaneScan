@@ -1,0 +1,147 @@
+QMainWindow {
+    background-color: #1C1C1C;
+}
+            
+/* ----------------- Tool Bar (OSCURO) ----------------- */
+QToolBar {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                stop:0 #2C2C2C, stop:1 #1E1E1E);
+    border-bottom: 1px solid #444444;
+    padding: 8px;
+}
+
+QToolBar QToolButton {
+    background-color: transparent;
+    color: #ECECEC;
+    font-size: 11pt;
+    margin: 0 6px;
+    padding: 4px 8px;
+}
+
+QToolBar QToolButton:hover {
+    background-color: #3A3A3A;
+    border-radius: 4px;
+}
+            
+/* ----------------- Tab Widget (OSCURO) ----------------- */
+QTabWidget::pane {
+    background-color: #1C1C1C;
+    border: 1px solid #444444;
+}
+
+QTabBar::tab {
+    background-color: #272727;
+    color: #ECECEC;
+    padding: 10px 20px;
+    margin: 0 2px;
+    border: 1px solid #444444;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    font-size: 11pt;
+}
+
+QTabBar::tab:selected {
+    background-color: #005F5F;
+    color: #FFFFFF;
+}
+
+QTabBar::tab:hover {
+    background-color: #3A3A3A;
+}
+            
+/* ----------------- Cards y widgets (OSCURO) ----------------- */
+QFrame#deviceCard {
+    background-color: #2A2A2A;
+    border-radius: 10px; 
+    border: 1px solid #444444;
+}
+
+QFrame#deviceCard QLabel {
+    font-size: 12pt;
+    margin: 2px 0;
+    color: #DDDDDD;
+}
+
+QFrame#mapFrame {
+    background-color: #262626;
+    border: 1px solid #444444;
+}
+
+QFrame#controlZone {
+    background-color: #2A2A2A;
+    border: 1px solid #444444;
+    border-radius: 8px;
+}
+
+QPushButton {
+    background-color: #343434;
+    border: 1px solid #555555;
+    border-radius: 5px;
+    padding: 6px 10px;
+    color: #DDDDDD;
+}
+
+QPushButton:hover {
+    background-color: #3E3E3E;
+}
+
+QTableWidget {
+    background-color: #2A2A2A;
+    border: 1px solid #444444;
+    color: #DDDDDD;
+    gridline-color: #444444;
+}
+
+QTableView {
+    background-color: #2A2A2A;
+}
+
+QTableView::item {
+    background-color: #2A2A2A;
+}
+
+QHeaderView::section {
+    background-color: #333333;
+    color: #DDDDDD;
+    border: none;
+}
+
+QTableCornerButton::section {
+    background-color: #333333;
+}
+
+QTableScrollBar {
+    background-color: #2A2A2A;
+}
+
+QLabel {
+    color: #DDDDDD;
+}
+
+/* ----------------- Botones Iniciar y Abortar (OSCURO) ----------------- */
+
+/* Botón Iniciar (OSCURO) */
+QPushButton#btnIniciar {
+    background-color: #28a745;
+    color: #ffffff;
+    border: 1px solid #1c7a33;
+    border-radius: 5px;
+    padding: 6px 10px;
+}
+
+QPushButton#btnIniciar:hover {
+    background-color: #218838;
+}
+
+/* Botón Abortar (OSCURO) */
+QPushButton#btnAbortar {
+    background-color: #dc3545;
+    color: #ffffff;
+    border: 1px solid #b52a36;
+    border-radius: 5px;
+    padding: 6px 10px;
+}
+
+QPushButton#btnAbortar:hover {
+    background-color: #c82333;
+}
