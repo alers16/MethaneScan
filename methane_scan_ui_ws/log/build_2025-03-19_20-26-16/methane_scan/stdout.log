@@ -1,0 +1,25 @@
+running egg_info
+writing ../../build/methane_scan/methane_scan.egg-info/PKG-INFO
+writing dependency_links to ../../build/methane_scan/methane_scan.egg-info/dependency_links.txt
+writing entry points to ../../build/methane_scan/methane_scan.egg-info/entry_points.txt
+writing requirements to ../../build/methane_scan/methane_scan.egg-info/requires.txt
+writing top-level names to ../../build/methane_scan/methane_scan.egg-info/top_level.txt
+reading manifest file '../../build/methane_scan/methane_scan.egg-info/SOURCES.txt'
+writing manifest file '../../build/methane_scan/methane_scan.egg-info/SOURCES.txt'
+running build
+running build_py
+copying methane_scan/views/components/title_bar.py -> /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/build/lib/methane_scan/views/components
+copying methane_scan/views/pages/ptu_config.py -> /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/build/lib/methane_scan/views/pages
+running install
+running install_lib
+copying /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/build/lib/methane_scan/views/components/title_bar.py -> /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages/methane_scan/views/components
+copying /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/build/lib/methane_scan/views/pages/ptu_config.py -> /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages/methane_scan/views/pages
+byte-compiling /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages/methane_scan/views/components/title_bar.py to title_bar.cpython-310.pyc
+byte-compiling /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages/methane_scan/views/pages/ptu_config.py to ptu_config.cpython-310.pyc
+running install_data
+running install_egg_info
+removing '/home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages/methane_scan-0.0.0-py3.10.egg-info' (and everything under it)
+Copying ../../build/methane_scan/methane_scan.egg-info to /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages/methane_scan-0.0.0-py3.10.egg-info
+running install_scripts
+Installing methane_scan_node script to /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/methane_scan
+writing list of installed files to '/home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/install.log'

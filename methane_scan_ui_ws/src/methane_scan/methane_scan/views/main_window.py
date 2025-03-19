@@ -86,9 +86,9 @@ class MainWindow(QMainWindow):
         """Callback que se activa cada vez que la ventana cambia de tamaño."""
         super().resizeEvent(event)
         screen_rect = QApplication.primaryScreen().availableGeometry()
-            
-        new_width = int(screen_rect.width() * 0.5)
-        new_height = int(screen_rect.height() * 0.5)
+        
+        new_width = int(screen_rect.width() * 0.8)
+        new_height = int(screen_rect.height() * 0.8)
         self.methane_scan_tab.map_frame.setMinimumSize(new_width, new_height)
     
     def toggle_theme(self):

@@ -6,5 +6,6 @@
         <file alias="icon_Robot.svg">resources/ev-front.svg</file>
         <file alias="icon_Perception.svg">resources/crosshair.svg</file>
         <file alias="icon_Detection.svg">resources/eye.svg</file>
+        <file alias="icon_State.svg">resources/gear-fill.svg</file>
     </qresource>
 </RCC>

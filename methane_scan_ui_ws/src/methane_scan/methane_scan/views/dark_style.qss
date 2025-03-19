@@ -72,7 +72,6 @@ QFrame#controlZone {
     border: 1px solid #444444;
     border-radius: 8px;
 }
-
 QPushButton {
     background-color: #343434;
     border: 1px solid #555555;
@@ -83,6 +82,13 @@ QPushButton {
 
 QPushButton:hover {
     background-color: #3E3E3E;
+}
+
+/* Estilo para botones deshabilitados, para que se vean más marcados */
+QPushButton:disabled {
+    background-color: #222222;
+    border: 1px solid #444444;
+    color: #888888;
 }
 
 QTableWidget {
@@ -130,9 +136,24 @@ QGroupBox {
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    margin-top: -5px;
+    margin-top: -8px;
     background-color: #1C1C1C;
     padding: 0 5px;
+}
+
+QLineEdit {
+    background-color: #333333;
+    color: #FFFFFF;
+    border: 1px solid #555555;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+/* Estilo para QLineEdit en estado readOnly, para ofrecer mayor feedback */
+QLineEdit:read-only {
+    background-color: #444444;
+    color: #BBBBBB;
+    border: 1px dashed #777777;
 }
 
 /* ----------------- Botones Iniciar y Abortar (OSCURO) ----------------- */
