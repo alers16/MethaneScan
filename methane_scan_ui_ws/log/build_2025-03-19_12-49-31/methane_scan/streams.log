@@ -1,0 +1,24 @@
+[0.454s] Invoking command in '/home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/src/methane_scan': PYTHONPATH=/home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/prefix_override:/home/aromsan/.local/lib/python3.10/site-packages/colcon_core/task/python/colcon_distutils_commands:/home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/methane_scan build --build-base /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/build install --record /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/install.log --single-version-externally-managed install_data
+[0.637s] running egg_info
+[0.637s] writing ../../build/methane_scan/methane_scan.egg-info/PKG-INFO
+[0.638s] writing dependency_links to ../../build/methane_scan/methane_scan.egg-info/dependency_links.txt
+[0.638s] writing entry points to ../../build/methane_scan/methane_scan.egg-info/entry_points.txt
+[0.638s] writing requirements to ../../build/methane_scan/methane_scan.egg-info/requires.txt
+[0.638s] writing top-level names to ../../build/methane_scan/methane_scan.egg-info/top_level.txt
+[0.640s] reading manifest file '../../build/methane_scan/methane_scan.egg-info/SOURCES.txt'
+[0.641s] writing manifest file '../../build/methane_scan/methane_scan.egg-info/SOURCES.txt'
+[0.641s] running build
+[0.641s] running build_py
+[0.641s] copying methane_scan/views/main_window.py -> /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/build/lib/methane_scan/views
+[0.643s] running install
+[0.643s] running install_lib
+[0.644s] copying /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/build/lib/methane_scan/views/main_window.py -> /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages/methane_scan/views
+[0.645s] byte-compiling /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages/methane_scan/views/main_window.py to main_window.cpython-310.pyc
+[0.646s] running install_data
+[0.646s] running install_egg_info
+[0.648s] removing '/home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages/methane_scan-0.0.0-py3.10.egg-info' (and everything under it)
+[0.648s] Copying ../../build/methane_scan/methane_scan.egg-info to /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages/methane_scan-0.0.0-py3.10.egg-info
+[0.649s] running install_scripts
+[0.664s] Installing methane_scan_node script to /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/methane_scan
+[0.664s] writing list of installed files to '/home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/install.log'
+[0.680s] Invoked command in '/home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/src/methane_scan' returned '0': PYTHONPATH=/home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/prefix_override:/home/aromsan/.local/lib/python3.10/site-packages/colcon_core/task/python/colcon_distutils_commands:/home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/install/methane_scan/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/methane_scan build --build-base /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/build install --record /home/aromsan/Documents/GitHub/MethaneScan/methane_scan_ui_ws/build/methane_scan/install.log --single-version-externally-managed install_data

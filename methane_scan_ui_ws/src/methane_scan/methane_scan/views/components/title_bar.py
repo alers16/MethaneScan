@@ -76,6 +76,7 @@ class TitleBar(QWidget):
         self.btnMax.clicked.connect(self.maximize_restore)
         self.btnClose.clicked.connect(self.parent.close)
 
+
     def maximize_restore(self):
         if self.parent.isMaximized():
             self.parent.showNormal()

@@ -1,7 +1,7 @@
 # ptu_config_widget.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QPushButton, QGridLayout, QSizePolicy
+    QFrame, QPushButton, QGridLayout, QSizePolicy, QGroupBox
 )
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import Qt
@@ -26,11 +26,16 @@ class PTUConfigWidget(QWidget):
         # Título principal
         title_label = QLabel("Configuración de la PTU")
         title_label.setContentsMargins(0, 0, 0, 20)
+        title_label.setMaximumHeight(60)
         title_label.setStyleSheet("font-weight: bold; font-size: 18pt;")
         config_layout.addWidget(title_label)
 
         cards_layout = QHBoxLayout()
+        cards_layout.setAlignment(Qt.AlignLeft)
         config_layout.addLayout(cards_layout)
+
+        #Mirar ChatGPT para hacerlo más bonito
+        
 
         # ------------------ Card 1: Parámetros de Percepción ------------------
         card1 = self._create_card(
@@ -38,7 +43,7 @@ class PTUConfigWidget(QWidget):
             body="Greyhound decisively hello cordingly wonderfully marginally for upon excluding.",
             icon=":/icon_Perception.svg"
         )
-        cards_layout.addWidget(card1)
+        cards_layout.addWidget(card1, 1)
 
         # ------------------ Card 2: Parámetros de Detección ------------------
         card2 = self._create_card(
@@ -46,7 +51,7 @@ class PTUConfigWidget(QWidget):
             body="Greyhound decisively hello cordingly wonderfully marginally for upon excluding.",
             icon=":/icon_Detection.svg"
         )
-        cards_layout.addWidget(card2)
+        cards_layout.addWidget(card2, 1)
 
         # ------------------  Estado de la PTU ------------------
         state_layout = QVBoxLayout()
@@ -54,30 +59,14 @@ class PTUConfigWidget(QWidget):
 
         state_title = QLabel("Estado de la PTU")
         state_title.setStyleSheet("font-weight: bold; font-size: 18pt;")
+        state_title.setMaximumHeight(60)
         state_layout.addWidget(state_title)
 
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(20)
-        grid.setVerticalSpacing(15)
-        grid.setAlignment(Qt.AlignLeft)
-        grid.setContentsMargins(0, 0, 10, 10)
-        state_layout.addLayout(grid)
-        
-        battery_title = QLabel("Batería: 70%")
-        battery_title.setStyleSheet("font-size: 12pt;")
-        grid.addWidget(battery_title, 0, 0)
+        position_group = QGroupBox("Posición")
+        position_group_layout = QGridLayout()
+        position_group.setLayout(position_group_layout)
+        state_layout.addWidget(position_group)
 
-        sync_title = QLabel("Sincronización: Completada")
-        sync_title.setStyleSheet("font-size: 12pt;")
-        grid.addWidget(sync_title, 1, 0)
-
-        state_title = QLabel("Estado Operativo: En marcha")
-        state_title.setStyleSheet("font-size: 12pt;")
-        grid.addWidget(state_title, 2, 0)
-
-        self.simulate_btn = QPushButton("Simular")
-        self.simulate_btn.setStyleSheet("font-size: 11pt; padding: 6px 12px;")
-        state_layout.addWidget(self.simulate_btn, alignment=Qt.AlignLeft)
 
 
         # ------------------ Card 4: Acciones ------------------
@@ -105,9 +94,9 @@ class PTUConfigWidget(QWidget):
         """Crea un QFrame estilo 'card' con título y texto."""
         card = QFrame()
         card.setObjectName("deviceCard")
+        card.setMaximumHeight(160)
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(15, 15, 15, 15)
-        card_layout.setSpacing(10)
+        card_layout.setContentsMargins(20, 20, 20, 20)
 
         circle_label = QLabel()
         circle_label.setMinimumSize(40, 40)
@@ -121,10 +110,13 @@ class PTUConfigWidget(QWidget):
         card_layout.addWidget(circle_label)
 
         title_label = QLabel(title)
+        title_label.setMaximumHeight(40)
         title_label.setStyleSheet("font-weight: bold; font-size: 14pt;")
         card_layout.addWidget(title_label)
 
         body_label = QLabel(body)
+        body_label.setMaximumHeight(40) 
+        body_label.setStyleSheet("font-size: 12pt;")
         card_layout.addWidget(body_label)
 
         return card

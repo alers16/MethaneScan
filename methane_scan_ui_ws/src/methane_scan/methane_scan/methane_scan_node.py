@@ -2,7 +2,7 @@ import sys
 import threading
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String as ROSString
+from std_msgs.msg import String
 import cv2
 import numpy as np
 import configparser as cp
@@ -15,6 +15,10 @@ import os
 class MethaneScanNode(Node):
     def __init__(self):
         super().__init__('methane_scan_node')
+
+        #self.subscription = self.create_subscription(String, "/test_PTU")
+
+
 
 def main(args=None):
     rclpy.init(args=args)

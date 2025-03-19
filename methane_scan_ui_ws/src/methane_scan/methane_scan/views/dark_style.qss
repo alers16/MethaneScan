@@ -118,6 +118,23 @@ QLabel {
     color: #DDDDDD;
 }
 
+QGroupBox {
+    border: 1px solid #444444;
+    border-radius: 8px;
+    color: #DDDDDD;
+    font-size: 15pt;
+    font-weight: bold;
+    margin-top: 1em;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    margin-top: -5px;
+    background-color: #1C1C1C;
+    padding: 0 5px;
+}
+
 /* ----------------- Botones Iniciar y Abortar (OSCURO) ----------------- */
 
 /* Botón Iniciar (OSCURO) */
