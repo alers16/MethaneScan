@@ -116,10 +116,10 @@ class TitleBar(QWidget):
         # Si la ventana se acerca al borde superior, maximizarla (snap)
         screen = QApplication.primaryScreen().availableGeometry()
         so = platform.system()
-        if so == "Windows" and not self.parent.isMaximized():
+        if so == "Windows":
             if self.parent.y() <= 10:
                 self.maximize_restore()
-        elif so == "Linux" and not self.parent.isMaximized():
+        elif so == "Linux":
             if self.parent.y() <= 56:
                 self.maximize_restore()
     

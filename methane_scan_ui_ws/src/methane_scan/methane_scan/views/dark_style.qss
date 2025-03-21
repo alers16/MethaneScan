@@ -156,6 +156,7 @@ QLineEdit:read-only {
     border: 1px dashed #777777;
 }
 
+
 /* ----------------- Botones Iniciar y Abortar (OSCURO) ----------------- */
 
 /* Botón Iniciar (OSCURO) */
@@ -182,4 +183,11 @@ QPushButton#btnAbortar {
 
 QPushButton#btnAbortar:hover {
     background-color: #c82333;
+}
+
+QDialog {
+    background-color: #1C1C1C;
+    color: #DDDDDD;
+    border: 1px solid #444444;
+    padding: 8px;
 }

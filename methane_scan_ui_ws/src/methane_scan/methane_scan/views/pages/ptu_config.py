@@ -1,17 +1,20 @@
 # ptu_config_widget.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QPushButton, QGridLayout, QSizePolicy, QGroupBox, QLineEdit
+    QFrame, QPushButton, QGridLayout, QSizePolicy, QGroupBox, QLineEdit, QDialog
 )
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import Qt, pyqtSignal
 from methane_scan import qresources_rc # type: ignore
 
-class PTUConfigWidget(QWidget):
+class PTUConfigWidget(QDialog):
     position_saved = pyqtSignal(tuple)
 
-    def __init__(self):
+    def __init__(self, parent=None):
         super().__init__()
+        self.parent = parent
+        self.setStyleSheet(parent.styleSheet())
+        self.closeEvent = lambda event: (self.parent.methane_scan_tab.setEnabled(True), self._reset_fields())
         self._build_ui()
         self.PTU_coordinates = None
 
@@ -23,14 +26,14 @@ class PTUConfigWidget(QWidget):
 
         # Configuración de parámetros de la PTU
         config_layout = QVBoxLayout()
-        config_layout.setContentsMargins(0, 0, 0, 40)  # Márgenes inferiores mayores
+        config_layout.setContentsMargins(0, 0, 0, 20)  # Márgenes inferiores mayores
         layout.addLayout(config_layout)
 
         # Título principal
         title_label = QLabel("Configuración de la PTU")
         title_label.setContentsMargins(0, 0, 0, 20)
         title_label.setMaximumHeight(60)
-        title_label.setStyleSheet("font-weight: bold; font-size: 18pt;")
+        title_label.setStyleSheet("font-weight: bold; font-size: 22pt;")
         config_layout.addWidget(title_label)
 
         cards_layout = QHBoxLayout()
@@ -60,7 +63,7 @@ class PTUConfigWidget(QWidget):
         state_layout.setContentsMargins(0, 0, 0, 40)
 
         state_title = QLabel("Estado de la PTU")
-        state_title.setStyleSheet("font-weight: bold; font-size: 18pt;")
+        state_title.setStyleSheet("font-weight: bold; font-size: 22pt;")
         state_title.setContentsMargins(0, 0, 0, 20)
         state_title.setMaximumHeight(60)
         state_layout.addWidget(state_title)
@@ -81,6 +84,8 @@ class PTUConfigWidget(QWidget):
         self.lat_edit = QLineEdit()
         self.lat_edit.setMaximumWidth(100)
         self.lon_edit = QLineEdit()
+        self.lat_edit.setText("36.71579")
+        self.lon_edit.setText("-4.478165")
         self.lon_edit.setMaximumWidth(100)
         self.save_button = QPushButton("Guardar Posición")
         self.save_button.setStyleSheet("margin-top: 10px;")
@@ -112,11 +117,11 @@ class PTUConfigWidget(QWidget):
         circle_label.setStyleSheet(f"background-color: #f0f0f0; border-radius: 10px;")
         operative_layout.addWidget(circle_label)
 
-        self.state = "Operativo"
-        state_label = QLabel(f"Estado: {self.state}")
-        state_label.setStyleSheet("font-size: 14pt;")
-        state_label.setMaximumHeight(40)
-        operative_layout.addWidget(state_label)
+        state = "Operativo"
+        self.state_label = QLabel(f"Estado: {state}")
+        self.state_label.setStyleSheet("font-size: 14pt;")
+        self.state_label.setMaximumHeight(40)
+        operative_layout.addWidget(self.state_label)
 
         state_layout.addLayout(operative_layout)
 
@@ -161,7 +166,7 @@ class PTUConfigWidget(QWidget):
 
         title_label = QLabel(title)
         title_label.setMaximumHeight(40)
-        title_label.setStyleSheet("font-weight: bold; font-size: 14pt;")
+        title_label.setStyleSheet("font-weight: bold; font-size: 16pt;")
         card_layout.addWidget(title_label)
 
         body_label = QLabel(body)
@@ -173,15 +178,28 @@ class PTUConfigWidget(QWidget):
     
     def register_home_callback(self, callback):
         """Permite registrar un callback para volver a la pantalla Home."""
-        self.discard_btn.clicked.connect(callback)
+        self.discard_btn.clicked.connect(lambda: (callback(), self._reset_fields()))
+    
+    def register_apply_callback(self, callback):
+        """Permite registrar un callback para aplicar los cambios."""
+        self.apply_btn.clicked.connect(lambda: (self._apply_changes(), callback()))
+    
+    def _reset_fields(self):
+        self.lat_edit.clear()
+        self.lon_edit.clear()
+        self.PTU_coordinates = None
+        self.save_button.setDisabled(True)
+    
+    def _apply_changes(self):
+        #Por ahora asi, luego hay que añadir el guardado de los parametros
+        if self.PTU_coordinates:
+            self.position_saved.emit(self.PTU_coordinates)
     
     def _save_position(self):
         try:
             lat = float(self.lat_edit.text())
             lng = float(self.lon_edit.text())
             self.PTU_coordinates = (lat, lng)
-            # Emitimos la señal con la posición
-            self.position_saved.emit(self.PTU_coordinates)
 
             self.lat_edit.setReadOnly(True)
             self.lon_edit.setReadOnly(True)
@@ -203,4 +221,7 @@ class PTUConfigWidget(QWidget):
             self.save_button.setDisabled(False)
         else:
             self.save_button.setDisabled(True)
+
+    def set_state(self, state):
+        self.state_label.setText(f"Estado: {state}")
     

@@ -20,6 +20,7 @@ class SatelliteMap(QWebEngineView):
         # Control de carga
         self._isLoaded = False
         self._pendingBeams = []  
+        self._pendingMarkers = []
         
         # Conectamos la señal que indica que la página ha terminado de cargar
         self.loadFinished.connect(self._handleLoadFinished)
@@ -81,10 +82,8 @@ class SatelliteMap(QWebEngineView):
                   drawingControlOptions: {{
                     position: google.maps.ControlPosition.TOP_CENTER,
                     drawingModes: [
-                      google.maps.drawing.OverlayType.MARKER,
                       google.maps.drawing.OverlayType.POLYLINE,
                       google.maps.drawing.OverlayType.RECTANGLE,
-                      google.maps.drawing.OverlayType.CIRCLE,
                       google.maps.drawing.OverlayType.POLYGON
                     ]
                   }},
@@ -219,6 +218,7 @@ class SatelliteMap(QWebEngineView):
                 beam.setMap(map);
               }}
 
+
               function drawPTUMarker(lat, lng) {{
                 var marker = new google.maps.Marker({{
                   position: {{ lat: lat, lng: lng }},
@@ -228,6 +228,17 @@ class SatelliteMap(QWebEngineView):
                   icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
                 }});
               }}
+
+              function drawHunterMarker(lat, lng) {{
+                var marker = new google.maps.Marker({{
+                  position: {{ lat: lat, lng: lng }},
+                  map: map,
+                  title: "Hunter",
+                  // Opcional: Puedes definir un icono personalizado
+                  icon: "http://maps.google.com/mapfiles/ms/icons/red-dot.png"
+                }});
+              }}
+
             </script>
           </head>
           <body onload="initMap()">
@@ -248,6 +259,11 @@ class SatelliteMap(QWebEngineView):
             self._execDrawBeam(coords)
         self._pendingBeams.clear()
 
+        # Si había markers pendientes, dibujarlos ahora
+        for lat, lng in self._pendingMarkers:
+            self.drawPTUMarker(lat, lng)
+        self._pendingMarkers.clear()
+
     def getCorners(self, callback):
         """Invoca getCorners() en JS y llama a 'callback' con la lista de esquinas."""
         code = "getCorners();"
@@ -266,8 +282,22 @@ class SatelliteMap(QWebEngineView):
     
     def drawPTUMarker(self, lat, lng):
         """Dibuja un marcador en la posición especificada."""
-        code = f"drawPTUMarker({lat}, {lng});"
-        self.page().runJavaScript(code)
+        if not self._isLoaded:
+            # Todavía no ha cargado, encolamos
+            self._pendingMarkers.append((lat, lng))
+        else:
+          code = f"drawPTUMarker({lat}, {lng});"
+          self.page().runJavaScript(code)
+
+    def drawRobotMarker(self, lat, lng):
+        """Dibuja un marcador en la posición especificada."""
+        if not self._isLoaded:
+            # Todavía no ha cargado, encolamos
+            self._pendingMarkers.append((lat, lng))
+        else:
+          code = f"drawHunterMarker({lat}, {lng});"
+          self.page().runJavaScript(code)
+
 
     def _execDrawBeam(self, coords):
         # Llama a la función JS drawBeam(coordList)

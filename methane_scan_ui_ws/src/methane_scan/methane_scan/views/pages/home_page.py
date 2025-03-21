@@ -3,11 +3,14 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem, QHeaderView, QSizePolicy, QGraphicsScene
 )
 from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 
 from methane_scan.views.components.map_view import SatelliteMap # type: ignore
+from methane_scan.views.components.device_card import DeviceCard # type: ignore
 
 class HomePage(QWidget):
+    path_saved = pyqtSignal(list)
+
     def __init__(self, API_KEY):
         super().__init__()
         self.setObjectName("methaneScanTab")
@@ -24,14 +27,14 @@ class HomePage(QWidget):
         layout.addLayout(devices_layout)
         
         # Crear las tres "cards" de dispositivos
-        self.card_ptu = self._create_device_card("PTU", "Conectado y funcionando (90%)", ":/icon_PTU.svg")
-        card_tdlas = self._create_device_card("TDLAS", "Conectado y funcionando (90%)", ":/icon_TDLAS.svg")
-        card_robot = self._create_device_card("Robot", "Conectado y funcionando (90%)", ":/icon_Robot.svg")
+        self.card_ptu = DeviceCard("PTU", "No se encuentran: ('Posición', 'Confirmación')", ":/icon_PTU.svg")
+        self.card_tdlas = DeviceCard("TDLAS", "Conectado y funcionando (90%)", ":/icon_TDLAS.svg")
+        self.card_robot = DeviceCard("Robot", "No se encuentran: ('Posición', 'Trayectoria', 'Velocidad')", ":/icon_Robot.svg")
         
         # Añadir las cards al layout con 'stretch factor' para que tengan igual ancho
         devices_layout.addWidget(self.card_ptu, 1)
-        devices_layout.addWidget(card_tdlas, 1)
-        devices_layout.addWidget(card_robot, 1)
+        devices_layout.addWidget(self.card_tdlas, 1)
+        devices_layout.addWidget(self.card_robot, 1)
         
         # 2) Zona central: Mapa (izq) y Zona de Control (dcha)
         center_layout = QHBoxLayout()
@@ -139,47 +142,16 @@ class HomePage(QWidget):
         
         layout.addWidget(table, stretch=1)
 
-
-    def _create_device_card(self, device_name, status_text, icon):
-        """Crea una 'card' para mostrar el estado de un dispositivo de forma responsive."""
-        frame = QFrame()
-        frame.setObjectName("deviceCard")
-        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        frame.setCursor(Qt.PointingHandCursor)
-        
-        v_layout = QVBoxLayout(frame)
-        v_layout.setContentsMargins(10, 10, 10, 10)
-        v_layout.setSpacing(5)
-        
-        # Círculo con ícono
-        circle_label = QLabel()
-        circle_label.setMinimumSize(40, 40)
-        circle_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        circle_label.setAlignment(Qt.AlignCenter)
-        icon_pixmap = QIcon(icon).pixmap(64, 64).scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        circle_label.setPixmap(icon_pixmap)
-        circle_label.setStyleSheet("background-color: #f0f0f0; border-radius: 10px;")
-        
-        status_title = QLabel("Estado del dispositivo")
-        status_title.setStyleSheet("color: #666666; font-size: 10pt; font-weight: bold;")
-        
-        label_device = QLabel(device_name)
-        label_device.setStyleSheet("font-weight: bold; font-size: 13pt;")
-        
-        label_status = QLabel(status_text)
-        label_status.setStyleSheet("color: #666666; font-size: 10pt;")
-        
-        v_layout.addWidget(circle_label)
-        v_layout.addWidget(status_title)
-        v_layout.addWidget(label_device)
-        v_layout.addWidget(label_status)
-
-        return frame
     
     def register_ptu_config_callback(self, callback):
         """Permite registrar un callback que se ejecutará al hacer clic en la card PTU."""
         # Usamos una lambda para ignorar el argumento 'event' y llamar al callback inyectado
         self.card_ptu.mousePressEvent = lambda event: callback()
+    
+    def register_robot_config_callback(self, callback):
+        """Permite registrar un callback que se ejecutará al hacer clic en la card Robot."""
+        # Usamos una lambda para ignorar el argumento 'event' y llamar al callback inyectado
+        self.card_robot.mousePressEvent = lambda event: callback()
 
     def onGetRectCorners(self):
         # Llamamos a getRectangleCorners y definimos un callback
@@ -201,10 +173,16 @@ class HomePage(QWidget):
         corners es la lista [SW, NW, NE, SE] o None si no hay rectángulo.
         Cada esquina es un dict con lat, lng.
         """
-        self.node.get_logger().info(self.map_frame.page().last_message)
-        if corners is None:
-            self.node.get_logger().info("No hay rectángulo dibujado todavía.")
+        if corners is not None:
+            self.path_saved.emit(corners)
+    
+    def set_device_status(self, device, status, errors = []):
+        if device == "PTU":
+            self.card_ptu.set_status(status, errors)
+        elif device == "Robot":
+            self.card_robot.set_status(status, errors)
         else:
-            self.node.get_logger().info("Esquinas de la figura:")
-            for corner in corners:
-                self.node.get_logger().info(f"  lat={corner['lat']}, lng={corner['lng']}")
+            raise ValueError("Dispositivo no reconocido")
+    
+    
+

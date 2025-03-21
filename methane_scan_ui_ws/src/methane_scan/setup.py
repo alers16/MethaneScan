@@ -32,6 +32,7 @@ setup(
     entry_points={
     	'console_scripts': [
         	'methane_scan_node = methane_scan.methane_scan_node:main',
+        	'ptu_ready_publisher = methane_scan.ptu_ready_sim_node:main'
     	],
    },
 )

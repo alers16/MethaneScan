@@ -14,6 +14,7 @@ import os
 from dotenv import load_dotenv
 from methane_scan.views.components.title_bar import TitleBar # type: ignore
 from methane_scan.views.pages.home_page import HomePage # type: ignore
+from methane_scan.views.pages.robot_config import RobotConfigWidget # type: ignore
 import methane_scan.qresources_rc  # type: ignore # Tu archivo de recursos compilado
 
 config_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)))
@@ -24,8 +25,11 @@ if os.path.isfile(env_path):
 else:
     print("No se encontró el archivo .env.")
 
+# Add error handling for API_KEY initialization
 API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
-
+if API_KEY is None:
+    print("WARNING: GOOGLE_MAPS_API_KEY not found in environment variables")
+    print("Maps functionality may be limited or unavailable")
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -73,11 +77,15 @@ class MainWindow(QMainWindow):
         self.methane_scan_tab = HomePage(API_KEY)
 
         # Creamos la pantalla de configuración (por ejemplo, PTU Config)
-        self.ptu_config_widget = PTUConfigWidget()
+        self.ptu_config_widget = PTUConfigWidget(self)
+
+        # Creamos la pantalla de configuración del robot
+        self.robot_config_widget = RobotConfigWidget(self)
 
         # Añadimos ambas pantallas al stacked widget
         self.stacked_widget.addWidget(self.methane_scan_tab)        # Índice 0: Pantalla principal
-        self.stacked_widget.addWidget(self.ptu_config_widget)         # Índice 1: Pantalla de configuración
+        #self.stacked_widget.addWidget(self.ptu_config_widget)         # Índice 1: Pantalla de configuración
+        #self.stacked_widget.addWidget(self.robot_config_widget)         # Índice 2: Pantalla de configuración
 
         # Inicia mostrando la pantalla principal
         self.stacked_widget.setCurrentIndex(0)
@@ -87,8 +95,8 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         screen_rect = QApplication.primaryScreen().availableGeometry()
         
-        new_width = int(screen_rect.width() * 0.8)
-        new_height = int(screen_rect.height() * 0.8)
+        new_width = int(screen_rect.width() * 0.5)
+        new_height = int(screen_rect.height() * 0.5)
         self.methane_scan_tab.map_frame.setMinimumSize(new_width, new_height)
     
     def toggle_theme(self):
@@ -106,16 +114,35 @@ class MainWindow(QMainWindow):
     def register_ptu_config_callback(self, callback):
         self.methane_scan_tab.register_ptu_config_callback(callback)
 
+    def register_robot_config_callback(self, callback):
+        self.methane_scan_tab.register_robot_config_callback(callback)
+
     def register_home_callback(self, callback):
         self.ptu_config_widget.register_home_callback(callback)
         self.titleBar.register_home_callback(callback)
+        self.robot_config_widget.register_home_callback(callback)
+
+    def register_apply_callback(self, callback):
+        self.ptu_config_widget.register_apply_callback(callback)
+        self.robot_config_widget.register_apply_callback(callback)
 
     # Métodos para cambiar la pantalla
     def switch_to_ptu_config(self):
-        self.stacked_widget.setCurrentWidget(self.ptu_config_widget)
+        self.ptu_config_widget.show()
+        self.methane_scan_tab.setEnabled(False)
+
+    def switch_to_robot_config(self):
+        self.robot_config_widget.show()
+        self.methane_scan_tab.setEnabled(False)
 
     def switch_to_home(self):
-        self.stacked_widget.setCurrentWidget(self.methane_scan_tab)
+        if self.ptu_config_widget.isVisible():
+            self.ptu_config_widget.hide()
+        
+        if self.robot_config_widget.isVisible():
+            self.robot_config_widget.hide()
+
+        self.methane_scan_tab.setEnabled(True)
 
 def main():
     app = QApplication(sys.argv)
