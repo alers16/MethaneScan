@@ -2,102 +2,382 @@
 from methane_scan.views.main_window import MainWindow # type: ignore
 from methane_scan.views.pages.ptu_config import PTUConfigWidget # type: ignore
 
+from PyQt5.QtCore import QMetaObject, Qt, QTimer
+import traceback
+
 class MainController():
     def __init__(self, node):
-
+        """Initialize the controller with required components and state"""
         self.node = node
-        # Instanciar la vista principal
-        self.view = MainWindow()
-        # Conectar señales o callbacks para delegar la navegación
-        self._connect_events()
+        self.initialized = False
+        self.widgets_connected = False
+        self.dialog_active = False
+        
         self._init_parameters()
+        
+        try:
+            self.view = MainWindow()
+            # Connect signals and callbacks
+            self._connect_events()
+            self.initialized = True
+            self.node.get_logger().info("MainController initialized successfully")
+        except Exception as e:
+            self.node.get_logger().error(f"Error initializing MainController: {str(e)}")
+            traceback.print_exc()
+            self.view = None
 
     def _init_parameters(self):
+        """Initialize state parameters with default values"""
         self.PTU_position = None
         self.path = []  
         self.PTU_ready = False
         self.robot_speed = None
         self.robot_position = None
+        # Add state tracking
+        self.ptu_configured = False
+        self.robot_configured = False
 
     def _connect_events(self):
-        # Cuando se requiera cambiar a la pantalla de PTU, invocar al método del controlador
-        self.view.register_ptu_config_callback(self.show_ptu_config)
-
-        # Conectar el botón de "volver a home" de la pantalla de PTU
-        self.view.register_home_callback(self.show_home)
-
-        # Conectar la señal que emite la posición en PTUConfigWidget
-        self.view.ptu_config_widget.position_saved.connect(self._update_ptu_position)
-
-        # Conectar el botón de "aplicar cambios"
-        self.view.register_apply_callback(self.show_home)
+        """Connect all UI events to their respective handlers with error handling"""
+        if self.view is None:
+            self.node.get_logger().error("Cannot connect events: view is not initialized")
+            return
         
-        # Conectar la señal que emite la ruta en MethaneScanTab
-        self.view.methane_scan_tab.path_saved.connect(self._update_path)
-
-        # Cuando se requiera cambiar a la pantalla del Robot, invocar al método del controlador
-        self.view.register_robot_config_callback(self.show_robot_config)
-
-        # Conectar la señal que emite la velocidad en RobotConfigWidget
-        self.view.robot_config_widget.speed_saved.connect(self._update_robot_speed)
+        try:
+            # Navigation callbacks
+            self.view.register_ptu_config_callback(self.show_ptu_config)
+            self.view.register_home_callback(self.show_home)
+            self.view.register_robot_config_callback(self.show_robot_config)
+            
+            # Connect dialog results
+            if hasattr(self.view, 'ptu_config_dialog') and self.view.ptu_config_dialog is not None:
+                self.view.ptu_config_dialog.accepted.connect(self.on_ptu_dialog_accepted)
+                self.view.ptu_config_dialog.rejected.connect(self.on_ptu_dialog_rejected)
+            else:
+                self.node.get_logger().warn("PTU config dialog not available for event connection")
+            
+            if hasattr(self.view, 'robot_config_dialog') and self.view.robot_config_dialog is not None:
+                self.view.robot_config_dialog.accepted.connect(self.on_robot_dialog_accepted)
+                self.view.robot_config_dialog.rejected.connect(self.on_robot_dialog_rejected)
+            else:
+                self.node.get_logger().warn("Robot config dialog not available for event connection")
+                
+            # Connect widget signals if available
+            if hasattr(self.view, 'ptu_config_widget') and self.view.ptu_config_widget is not None:
+                self.view.ptu_config_widget.position_saved.connect(self._update_ptu_position)
+            else:
+                self.node.get_logger().warn("PTU config widget not available for event connection")
+                
+            if hasattr(self.view, 'methane_scan_tab') and self.view.methane_scan_tab is not None:
+                self.view.methane_scan_tab.path_saved.connect(self._update_path)
+            else:
+                self.node.get_logger().warn("Methane scan tab not available for event connection")
+                
+            if hasattr(self.view, 'robot_config_widget') and self.view.robot_config_widget is not None:
+                self.view.robot_config_widget.speed_saved.connect(self._update_robot_speed)
+            else:
+                self.node.get_logger().warn("Robot config widget not available for event connection")
+                
+            self.widgets_connected = True
+            self.node.get_logger().info("All UI events connected successfully")
+        except Exception as e:
+            self.node.get_logger().error(f"Error connecting events: {str(e)}")
+            traceback.print_exc()
+        
 
     def show_ptu_config(self):
-        self.view.switch_to_ptu_config()
+        """Show PTU configuration dialog with error handling"""
+        if self.view is None:
+            self.node.get_logger().error("Cannot show PTU config: view is not initialized")
+            return
+            
+        try:
+            self.dialog_active = True
+            self.node.get_logger().info("Opening PTU configuration dialog")
+            self.view.switch_to_ptu_config()
+            self.node.get_logger().info("PTU configuration dialog opened")
+        except Exception as e:
+            self.dialog_active = False
+            self.node.get_logger().error(f"Error opening PTU config dialog: {str(e)}")
+            traceback.print_exc()
 
     def show_home(self):
-        self.view.switch_to_home()
+        """Return to home screen by closing any open dialogs"""
+        if self.view is None:
+            self.node.get_logger().error("Cannot show home: view is not initialized")
+            return
+            
+        try:
+            self.view.switch_to_home()
+            self.dialog_active = False
+            self.node.get_logger().info("Returned to home screen")
+        except Exception as e:
+            self.node.get_logger().error(f"Error returning to home: {str(e)}")
+            traceback.print_exc()
 
     def show_robot_config(self):
-        self.view.switch_to_robot_config()
+        """Show robot configuration dialog with error handling"""
+        if self.view is None:
+            self.node.get_logger().error("Cannot show robot config: view is not initialized")
+            return
+            
+        try:
+            self.dialog_active = True
+            self.node.get_logger().info("Opening robot configuration dialog")
+            self.view.switch_to_robot_config()
+            self.node.get_logger().info("Robot configuration dialog opened")
+        except Exception as e:
+            self.dialog_active = False
+            self.node.get_logger().error(f"Error opening robot config dialog: {str(e)}")
+            traceback.print_exc()
+            
+    def on_dialog_accepted(self):
+        """General handler for dialog acceptance"""
+        try:
+            self.dialog_active = False
+            self.node.get_logger().info("Dialog accepted, returning to home")
+            self.show_home()
+        except Exception as e:
+            self.node.get_logger().error(f"Error handling dialog acceptance: {str(e)}")
+            traceback.print_exc()
+            
+    def on_ptu_dialog_accepted(self):
+        """Handle PTU configuration dialog acceptance"""
+        try:
+            self.dialog_active = False
+            self.node.get_logger().info("PTU configuration accepted")
+            # Process any final PTU configuration data if needed
+            if hasattr(self.view, 'ptu_config_widget') and self.view.ptu_config_widget is not None:
+                position = self.view.ptu_config_widget.PTU_coordinates
+                if position:
+                    self._update_ptu_position(position)
+            else:
+                self.node.get_logger().warn("PTU config widget not available for final data retrieval")
+        except Exception as e:
+            self.node.get_logger().error(f"Error handling PTU dialog acceptance: {str(e)}")
+            traceback.print_exc()
+            
+    def on_ptu_dialog_rejected(self):
+        """Handle PTU configuration dialog rejection"""
+        try:
+            self.dialog_active = False
+            self.node.get_logger().info("PTU configuration cancelled")
+            # Additional cleanup if needed
+        except Exception as e:
+            self.node.get_logger().error(f"Error handling PTU dialog rejection: {str(e)}")
+            traceback.print_exc()
+            
+    def on_robot_dialog_accepted(self):
+        """Handle robot configuration dialog acceptance"""
+        try:
+            self.dialog_active = False
+            self.node.get_logger().info("Robot configuration accepted")
+            # Process any final robot configuration data if needed
+            if hasattr(self.view, 'robot_config_widget') and self.view.robot_config_widget is not None:
+                # Update robot with final configuration values
+                speed = self.view.robot_config_widget.speed
+                if speed:
+                    self._update_robot_speed(speed)
+            else:
+                self.node.get_logger().warn("Robot config widget not available for final data retrieval")
+        except Exception as e:
+            self.node.get_logger().error(f"Error handling robot dialog acceptance: {str(e)}")
+            traceback.print_exc()
+            
+    def on_robot_dialog_rejected(self):
+        """Handle robot configuration dialog rejection"""
+        try:
+            self.dialog_active = False
+            self.node.get_logger().info("Robot configuration cancelled")
+            # Additional cleanup if needed
+        except Exception as e:
+            self.node.get_logger().error(f"Error handling robot dialog rejection: {str(e)}")
+            traceback.print_exc()
 
     def _update_ptu_position(self, position):
-        self.PTU_position = position
-        self.view.methane_scan_tab.map_frame.drawPTUMarker(position[0], position[1])
-        self.check_PTU_ready()
+        """Update PTU position with error handling"""
+        if position is None:
+            self.node.get_logger().warn("Received null position for PTU")
+            return
+            
+        try:
+            self.PTU_position = position
+            self.node.get_logger().info(f"PTU position updated: {position}")
+            
+            # Check if view and components are available
+            if (self.view is not None and 
+                hasattr(self.view, 'methane_scan_tab') and 
+                self.view.methane_scan_tab is not None and
+                hasattr(self.view.methane_scan_tab, 'map_frame')):
+                
+                self.view.methane_scan_tab.map_frame.drawPTUMarker(position[0], position[1])
+            else:
+                self.node.get_logger().warn("Could not update map: UI components not available")
+                
+            self.check_PTU_ready()
+        except Exception as e:
+            self.node.get_logger().error(f"Error updating PTU position: {str(e)}")
+            traceback.print_exc()
 
     def _update_robot_speed(self, speed):
-        self.robot_speed = speed
-        self.node.get_logger().info(f"Velocidad actualizada: {speed}")
-        self.check_Robot_ready()
+        """Update robot speed with error handling"""
+        try:
+            self.robot_speed = speed
+            self.node.get_logger().info(f"Robot speed updated: {speed}")
+            self.check_Robot_ready()
+        except Exception as e:
+            self.node.get_logger().error(f"Error updating robot speed: {str(e)}")
+            traceback.print_exc()
 
     def update_PTU_ready(self, PTU_ready):
-        self.node.get_logger().info(f"PTU listo: {PTU_ready}")
-        self.PTU_ready = PTU_ready
-        self.check_PTU_ready()
+        """Update PTU ready status with error handling"""
+        try:
+            if PTU_ready is None:
+                self.node.get_logger().warn("Received null PTU_ready status")
+                return
+                
+            self.node.get_logger().info(f"PTU ready status updated: {PTU_ready}")
+            self.PTU_ready = PTU_ready
+            self.check_PTU_ready()
+        except Exception as e:
+            self.node.get_logger().error(f"Error updating PTU ready status: {str(e)}")
+            traceback.print_exc()
 
     def update_hunter_position(self, position):
-        self.robot_position = (float(position['lat']), float(position['lng']))
-        self.node.get_logger().info(f"Posición de Hunter actualizada: {position}")
-        #self.view.methane_scan_tab.map_frame.drawRobotMarker(float(position['lat']), float(position['lng']))
-        self.view.robot_config_widget.set_position(position)
-        self.check_Robot_ready()
+        """Update hunter position with error handling and null checks"""
+        try:
+            if not position:
+                self.node.get_logger().warn("Received null hunter position")
+                return
+                
+            self.robot_position = position
+            self.node.get_logger().info(f"Posición de Hunter actualizada: {position}")
+            
+            # Check if view and components are available before updating UI
+            if (self.view is not None and 
+                hasattr(self.view, 'methane_scan_tab') and 
+                self.view.methane_scan_tab is not None and
+                hasattr(self.view.methane_scan_tab, 'map_frame')):
+                
+                # Update map with hunter position
+                self.view.methane_scan_tab.map_frame.drawRobotMarker(
+                    position.get('lat', 0), 
+                    position.get('lng', 0)
+                )
+
+                self.view.robot_config_widget.set_position(position)
+            else:
+                self.node.get_logger().warn("Could not update map: UI components not available")
+            
+            # Update robot ready status
+            self.check_Robot_ready()
+        except Exception as e:
+            self.node.get_logger().error(f"Error updating hunter position: {str(e)}")
+            traceback.print_exc()
 
     def _update_path(self, path):
-        self.path = path
-        self.node.get_logger().info(f"Ruta actualizada: {path}")
-        self.check_Robot_ready()
+        """Update path with error handling"""
+        try:
+            if path is None:
+                self.node.get_logger().warn("Received null path")
+                return
+                
+            self.path = path
+            self.node.get_logger().info(f"Ruta actualizada: {path}")
+            self.check_Robot_ready()
+        except Exception as e:
+            self.node.get_logger().error(f"Error updating path: {str(e)}")
+            traceback.print_exc()
 
     def check_PTU_ready(self):
-        self.node.get_logger().info(f"Ha llegado: {self.PTU_ready} {self.PTU_position}")
-        if(self.PTU_position is not None and self.PTU_ready):
-            self.node.get_logger().info(f"Posición de PTU actualizada: {self.PTU_position}")
-            self.view.methane_scan_tab.set_device_status("PTU", True)
-            self.view.ptu_config_widget.set_state("Operativo")
-        elif (self.PTU_position is not None):
-            self.view.methane_scan_tab.set_device_status("PTU", False, ["Confirmación"])
-            self.view.ptu_config_widget.set_state("No se ha confirmado la posición")
-        else:
-            self.node.get_logger().info("PTU no configurado")
-            self.view.methane_scan_tab.set_device_status("PTU", False, ["Posición"])
-            self.view.ptu_config_widget.set_state("No se ha configurado la posición")
+        """Check PTU readiness with proper widget availability checks"""
+        try:
+            self.node.get_logger().info(f"Ha llegado: {self.PTU_ready} {self.PTU_position}")
+            
+            # Check if view and UI components are available
+            if self.view is None:
+                self.node.get_logger().error("Cannot check PTU ready: view is not initialized")
+                return
+                
+            has_methane_scan_tab = (hasattr(self.view, 'methane_scan_tab') and 
+                                   self.view.methane_scan_tab is not None)
+            has_ptu_config_widget = (hasattr(self.view, 'ptu_config_widget') and 
+                                    self.view.ptu_config_widget is not None)
+            
+            # Update PTU status based on current state
+            if(self.PTU_position is not None and self.PTU_ready):
+                self.node.get_logger().info(f"Posición de PTU actualizada: {self.PTU_position}")
+                self.ptu_configured = True
+                
+                if has_methane_scan_tab:
+                    self.view.methane_scan_tab.set_device_status("PTU", True)
+                if has_ptu_config_widget:
+                    self.view.ptu_config_widget.set_state("Operativo")
+            elif (self.PTU_position is not None):
+                self.ptu_configured = False
+                
+                if has_methane_scan_tab:
+                    self.view.methane_scan_tab.set_device_status("PTU", False, ["Confirmación"])
+                if has_ptu_config_widget:
+                    self.view.ptu_config_widget.set_state("No se ha confirmado la posición")
+            else:
+                self.node.get_logger().info("PTU no configurado")
+                self.ptu_configured = False
+                
+                if has_methane_scan_tab:
+                    self.view.methane_scan_tab.set_device_status("PTU", False, ["Posición"])
+                if has_ptu_config_widget:
+                    self.view.ptu_config_widget.set_state("No se ha configurado la posición")
+        except Exception as e:
+            self.node.get_logger().error(f"Error checking PTU ready: {str(e)}")
+            traceback.print_exc()
 
     def check_Robot_ready(self):
-        self.node.get_logger().info(f"Ha llegado: {self.robot_speed} {self.robot_position} {self.path}")
-        if (self.robot_speed is not None and self.robot_position is not None and self.path.__len__() > 0):
-            self.view.methane_scan_tab.set_device_status("Robot", True)
-        elif (self.robot_speed is not None and self.robot_position is not None):
-            self.view.methane_scan_tab.set_device_status("Robot", False, ["Trayectoria"])
-        elif (self.robot_speed is not None):
-            self.view.methane_scan_tab.set_device_status("Robot", False, ["Posición"])
-        else:
-            self.view.methane_scan_tab.set_device_status("Robot", False, ["Velocidad"])
+        """Check Robot readiness with proper widget availability checks"""
+        try:
+            self.node.get_logger().info(f"Ha llegado: {self.robot_speed} {self.robot_position} {self.path}")
+            
+            # Check if view is available
+            if self.view is None:
+                self.node.get_logger().error("Cannot check Robot ready: view is not initialized")
+                return
+                
+            # Check if methane_scan_tab is available
+            has_methane_scan_tab = (hasattr(self.view, 'methane_scan_tab') and 
+                                   self.view.methane_scan_tab is not None)
+            if not has_methane_scan_tab:
+                self.node.get_logger().error("Cannot check Robot ready: methane_scan_tab is not available")
+                return
+                
+            missing = []
+            
+            if self.robot_speed is None:
+                missing.append("Velocidad")
+            
+            if self.robot_position is None:
+                missing.append("Posición")
+            
+            if not self.path or len(self.path) == 0:
+                missing.append("Trayectoria")
+            
+            # Update robot configuration status
+            self.robot_configured = len(missing) == 0
+            
+            # Update UI status
+            if not missing:
+                self.view.methane_scan_tab.set_device_status("Robot", True)
+            else:
+                self.view.methane_scan_tab.set_device_status("Robot", False, missing)
+                
+            # Update robot config widget if available
+            if (hasattr(self.view, 'robot_config_widget') and 
+                self.view.robot_config_widget is not None):
+                
+                if not missing:
+                    self.view.robot_config_widget.set_state("Operativo")
+                else:
+                    missing_str = ", ".join(missing)
+                    self.view.robot_config_widget.set_state(f"Falta: {missing_str}")
+        except Exception as e:
+            self.node.get_logger().error(f"Error checking Robot ready: {str(e)}")
+            traceback.print_exc()

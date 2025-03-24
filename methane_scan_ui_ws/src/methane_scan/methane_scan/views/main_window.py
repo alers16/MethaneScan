@@ -2,7 +2,7 @@ import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QTabWidget, QVBoxLayout, 
     QHBoxLayout, QLabel, QPushButton, QFrame, QTableWidget,
-    QTableWidgetItem, QHeaderView, QSizePolicy, QToolBar, QAction, QStackedWidget, 
+    QTableWidgetItem, QHeaderView, QSizePolicy, QToolBar, QAction, QDialog,
     QGraphicsScene
 )
 from PyQt5.QtCore import Qt, QPoint
@@ -69,26 +69,37 @@ class MainWindow(QMainWindow):
         self.titleBar.setStyleSheet("background-color: #1C1C1C;")
         main_layout.addWidget(self.titleBar)
 
-        # Creamos el QStackedWidget para cambiar el contenido
-        self.stacked_widget = QStackedWidget()
-        main_layout.addWidget(self.stacked_widget)
-
         # Construimos la pantalla principal (pestaña MethaneScan)
         self.methane_scan_tab = HomePage(API_KEY)
-
-        # Creamos la pantalla de configuración (por ejemplo, PTU Config)
+        main_layout.addWidget(self.methane_scan_tab)
+        
+        # Creamos los diálogos de configuración como QDialog
+        self.ptu_config_dialog = QDialog(self)
+        self.ptu_config_dialog.setWindowTitle("Configuración PTU")
+        ptu_dialog_layout = QVBoxLayout(self.ptu_config_dialog)
+        ptu_dialog_layout.setSizeConstraint(QVBoxLayout.SetFixedSize)
         self.ptu_config_widget = PTUConfigWidget(self)
-
-        # Creamos la pantalla de configuración del robot
+        self.ptu_config_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        ptu_dialog_layout.addWidget(self.ptu_config_widget)
+        self.ptu_config_dialog.setModal(True)
+        
+        # Connect dialog signals
+        self.ptu_config_widget.accepted.connect(self.ptu_config_dialog.accept)
+        self.ptu_config_widget.rejected.connect(self.ptu_config_dialog.reject)
+        
+        # Diálogo de configuración del robot
+        self.robot_config_dialog = QDialog(self)
+        self.robot_config_dialog.setWindowTitle("Configuración Robot")
+        robot_dialog_layout = QVBoxLayout(self.robot_config_dialog)
+        robot_dialog_layout.setSizeConstraint(QVBoxLayout.SetFixedSize)
         self.robot_config_widget = RobotConfigWidget(self)
-
-        # Añadimos ambas pantallas al stacked widget
-        self.stacked_widget.addWidget(self.methane_scan_tab)        # Índice 0: Pantalla principal
-        #self.stacked_widget.addWidget(self.ptu_config_widget)         # Índice 1: Pantalla de configuración
-        #self.stacked_widget.addWidget(self.robot_config_widget)         # Índice 2: Pantalla de configuración
-
-        # Inicia mostrando la pantalla principal
-        self.stacked_widget.setCurrentIndex(0)
+        self.robot_config_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        robot_dialog_layout.addWidget(self.robot_config_widget)
+        self.robot_config_dialog.setModal(True)
+        
+        # Connect dialog signals
+        self.robot_config_widget.accepted.connect(self.robot_config_dialog.accept)
+        self.robot_config_widget.rejected.connect(self.robot_config_dialog.reject)
     
     def resizeEvent(self, event):
         """Callback que se activa cada vez que la ventana cambia de tamaño."""
@@ -97,7 +108,11 @@ class MainWindow(QMainWindow):
         
         new_width = int(screen_rect.width() * 0.5)
         new_height = int(screen_rect.height() * 0.5)
+        # Set the size of the map in the main tab
         self.methane_scan_tab.map_frame.setMinimumSize(new_width, new_height)
+        
+        # Let dialogs size themselves based on their content
+        # No fixed sizing for dialogs to allow them to adapt to their content
     
     def toggle_theme(self):
         """Cambia entre modo claro y oscuro."""
@@ -118,31 +133,31 @@ class MainWindow(QMainWindow):
         self.methane_scan_tab.register_robot_config_callback(callback)
 
     def register_home_callback(self, callback):
-        self.ptu_config_widget.register_home_callback(callback)
         self.titleBar.register_home_callback(callback)
-        self.robot_config_widget.register_home_callback(callback)
-
-    def register_apply_callback(self, callback):
-        self.ptu_config_widget.register_apply_callback(callback)
-        self.robot_config_widget.register_apply_callback(callback)
+        
+        # Connect dialog close events to home callback
+        self.ptu_config_dialog.rejected.connect(callback)
+        self.robot_config_dialog.rejected.connect(callback)
 
     # Métodos para cambiar la pantalla
     def switch_to_ptu_config(self):
-        self.ptu_config_widget.show()
-        self.methane_scan_tab.setEnabled(False)
-
-    def switch_to_robot_config(self):
-        self.robot_config_widget.show()
-        self.methane_scan_tab.setEnabled(False)
-
-    def switch_to_home(self):
-        if self.ptu_config_widget.isVisible():
-            self.ptu_config_widget.hide()
+        # Show PTU configuration dialog
+        # Ensure the dialog adjusts to content before showing
+        self.ptu_config_dialog.adjustSize()
+        self.ptu_config_dialog.exec_()
         
-        if self.robot_config_widget.isVisible():
-            self.robot_config_widget.hide()
-
-        self.methane_scan_tab.setEnabled(True)
+    def switch_to_robot_config(self):
+        # Show Robot configuration dialog
+        # Ensure the dialog adjusts to content before showing
+        self.robot_config_dialog.adjustSize()
+        self.robot_config_dialog.exec_()
+        
+    def switch_to_home(self):
+        # Close any open dialogs
+        if self.ptu_config_dialog.isVisible():
+            self.ptu_config_dialog.reject()
+        if self.robot_config_dialog.isVisible():
+            self.robot_config_dialog.reject()
 
 def main():
     app = QApplication(sys.argv)

@@ -1,28 +1,31 @@
 # ptu_config_widget.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QPushButton, QGridLayout, QSizePolicy, QGroupBox, QLineEdit, QDialog
+    QFrame, QPushButton, QGridLayout, QSizePolicy, QGroupBox, QLineEdit, QDialog,
+    QDialogButtonBox
 )
 from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from methane_scan import qresources_rc # type: ignore
 
-class PTUConfigWidget(QDialog):
+class PTUConfigWidget(QWidget):
     position_saved = pyqtSignal(tuple)
+    accepted = pyqtSignal()
+    rejected = pyqtSignal()
 
     def __init__(self, parent=None):
-        super().__init__()
+        super().__init__(parent)
         self.parent = parent
-        self.setStyleSheet(parent.styleSheet())
-        self.closeEvent = lambda event: (self.parent.methane_scan_tab.setEnabled(True), self._reset_fields())
+        if parent and hasattr(parent, 'styleSheet'):
+            self.setStyleSheet(parent.styleSheet())
         self._build_ui()
         self.PTU_coordinates = None
 
     def _build_ui(self):
         # Layout principal
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)  # Márgenes algo mayores
-        layout.setAlignment(Qt.AlignTop)
+        layout.setContentsMargins(20, 20, 20, 20)  # Balanced margins for better appearance
+        layout.setSpacing(15)  # Increased spacing for better visual separation
 
         # Configuración de parámetros de la PTU
         config_layout = QVBoxLayout()
@@ -31,9 +34,9 @@ class PTUConfigWidget(QDialog):
 
         # Título principal
         title_label = QLabel("Configuración de la PTU")
-        title_label.setContentsMargins(0, 0, 0, 20)
-        title_label.setMaximumHeight(60)
+        title_label.setContentsMargins(0, 0, 0, 10)
         title_label.setStyleSheet("font-weight: bold; font-size: 22pt;")
+        title_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         config_layout.addWidget(title_label)
 
         cards_layout = QHBoxLayout()
@@ -64,13 +67,12 @@ class PTUConfigWidget(QDialog):
 
         state_title = QLabel("Estado de la PTU")
         state_title.setStyleSheet("font-weight: bold; font-size: 22pt;")
-        state_title.setContentsMargins(0, 0, 0, 20)
-        state_title.setMaximumHeight(60)
+        state_title.setContentsMargins(0, 0, 0, 10)
+        state_title.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         state_layout.addWidget(state_title)
 
         position_group = QGroupBox("Posición")
-        position_group.setMaximumHeight(200)
-        position_group.setMaximumWidth(300)
+        position_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         position_group_layout = QGridLayout(position_group)
         position_group_layout.setContentsMargins(10, 10, 10, 10)
         position_group_layout.setHorizontalSpacing(10)
@@ -78,15 +80,15 @@ class PTUConfigWidget(QDialog):
         position_group_layout.setAlignment(Qt.AlignLeft)
 
         lat_label = QLabel("Latitud:")
-        lat_label.setMaximumHeight(40)
+        lat_label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
         lon_label = QLabel("Longitud:")
-        lon_label.setMaximumHeight(40)
+        lon_label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
         self.lat_edit = QLineEdit()
-        self.lat_edit.setMaximumWidth(100)
+        self.lat_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.lon_edit = QLineEdit()
         self.lat_edit.setText("36.71579")
         self.lon_edit.setText("-4.478165")
-        self.lon_edit.setMaximumWidth(100)
+        self.lon_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.save_button = QPushButton("Guardar Posición")
         self.save_button.setStyleSheet("margin-top: 10px;")
         self.save_button.setDisabled(True)
@@ -120,36 +122,30 @@ class PTUConfigWidget(QDialog):
         state = "Operativo"
         self.state_label = QLabel(f"Estado: {state}")
         self.state_label.setStyleSheet("font-size: 14pt;")
-        self.state_label.setMaximumHeight(40)
+        self.state_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         operative_layout.addWidget(self.state_label)
 
         state_layout.addLayout(operative_layout)
 
-        # ------------------ Card 4: Acciones ------------------
-        actions_layout = QVBoxLayout()
-        actions_layout.setAlignment(Qt.AlignLeft)
-        layout.addLayout(actions_layout)
-        action_label = QLabel("Acciones")
-        action_label.setStyleSheet("font-weight: bold; font-size: 18pt;")
-        actions_layout.addWidget(action_label)
-
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setContentsMargins(0, 20, 0, 0)
-        buttons_layout.setSpacing(10)
-
-        self.apply_btn = QPushButton("Aplicar Alarmas")
-        self.discard_btn = QPushButton("Descartar y volver")
-
-        buttons_layout.addWidget(self.apply_btn)
-        buttons_layout.addWidget(self.discard_btn)
-        actions_layout.addLayout(buttons_layout)
+        # ------------------ Dialog buttons ------------------
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self._on_accept)
+        self.button_box.rejected.connect(self._on_reject)
+        layout.addWidget(self.button_box)
+        
+        # Set size policies for the main widget to expand properly
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+        # Remove fixed constraints that would prevent proper sizing
+        self.setMinimumWidth(500)
+        self.adjustSize()
 
 
     def _create_card(self, title, body, icon):
         """Crea un QFrame estilo 'card' con título y texto."""
         card = QFrame()
-        card.setObjectName("deviceCard")
-        card.setMaximumHeight(160)
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        # Remove maximum height constraint to allow content-based sizing
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(20, 20, 20, 20)
 
@@ -165,24 +161,26 @@ class PTUConfigWidget(QDialog):
         card_layout.addWidget(circle_label)
 
         title_label = QLabel(title)
-        title_label.setMaximumHeight(40)
+        title_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         title_label.setStyleSheet("font-weight: bold; font-size: 16pt;")
         card_layout.addWidget(title_label)
 
         body_label = QLabel(body)
-        body_label.setMaximumHeight(40) 
+        body_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         body_label.setStyleSheet("font-size: 12pt;")
         card_layout.addWidget(body_label)
 
         return card
     
-    def register_home_callback(self, callback):
-        """Permite registrar un callback para volver a la pantalla Home."""
-        self.discard_btn.clicked.connect(lambda: (callback(), self._reset_fields()))
+    def _on_accept(self):
+        """Handle OK button click"""
+        self._apply_changes()
+        self.accepted.emit()
     
-    def register_apply_callback(self, callback):
-        """Permite registrar un callback para aplicar los cambios."""
-        self.apply_btn.clicked.connect(lambda: (self._apply_changes(), callback()))
+    def _on_reject(self):
+        """Handle Cancel button click"""
+        self._reset_fields()
+        self.rejected.emit()
     
     def _reset_fields(self):
         self.lat_edit.clear()
@@ -194,6 +192,11 @@ class PTUConfigWidget(QDialog):
         #Por ahora asi, luego hay que añadir el guardado de los parametros
         if self.PTU_coordinates:
             self.position_saved.emit(self.PTU_coordinates)
+    
+    # Add sizeHint method to properly suggest sizing to the parent dialog
+    def sizeHint(self):
+        # Calculate a better size based on content
+        return QSize(550, 650)
     
     def _save_position(self):
         try:

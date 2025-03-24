@@ -41,7 +41,7 @@ class SatelliteMap(QWebEngineView):
               }}
             </style>
             <!-- Google Maps + librería drawing -->
-            <script src="https://maps.googleapis.com/maps/api/js?key={api_key}&libraries=drawing"></script>
+            <script async src="https://maps.googleapis.com/maps/api/js?key={api_key}&libraries=drawing"></script>
             <script>
               let map;
               let drawingManager;
