@@ -18,6 +18,8 @@ from typing import Optional, Dict, Any, Callable
 class RosQtSignals(QtCore.QObject):
     ptu_ready_signal = QtCore.pyqtSignal(bool)
     hunter_position_signal = QtCore.pyqtSignal(dict)
+    TDLAS_ready_signal = QtCore.pyqtSignal(bool)
+    TDLAS_data_signal = QtCore.pyqtSignal(dict)
     log_message_signal = QtCore.pyqtSignal(str, str)  # level, message
 
 class MethaneScanNode(Node):
@@ -25,6 +27,9 @@ class MethaneScanNode(Node):
     
     def __init__(self):
         super().__init__('methane_scan_node')
+
+        # Declare parameters and initialize state
+        self.declare_parameters_ros()
         
         # Thread synchronization
         self._lock = threading.RLock()
@@ -41,42 +46,82 @@ class MethaneScanNode(Node):
         self._last_hunter_position = None
         self._ptu_ready_received = False
         self._hunter_position_received = False
+        self._TDLAS_ready_received = False
+        self._last_TDLAS_ready = None
+        self._last_TDLAS_data = None
+        
         
         # Initialize callbacks with safe no-op functions
         self._callback_ptu_ready: Optional[Callable[[bool], None]] = None
         self._callback_hunter_position: Optional[Callable[[Dict[str, Any]], None]] = None
+        self._callback_TDLAS_ready: Optional[Callable[[bool], None]] = None
+        self._callback_TDLAS_data: Optional[Callable[[Dict[str, Any]], None]] = None
         
         # Connect Qt signals to thread-safe handler methods
         self.signals.ptu_ready_signal.connect(self._handle_ptu_ready_qt)
         self.signals.hunter_position_signal.connect(self._handle_hunter_position_qt)
+        self.signals.TDLAS_ready_signal.connect(self._handle_TDLAS_ready_qt)
         self.signals.log_message_signal.connect(self._handle_log_message_qt)
+        self.signals.TDLAS_data_signal.connect(self._handle_TDLAS_data_qt)
         
-        # Create subscriptions with proper error handling
+        # Create subscriptions and publishers with proper error handling
         try:
             self.subscription = self.create_subscription(
                 Bool,
-                '/PTU_ready',
+                self.get_parameter('TOPICS.ptu_ready').value,
                 self._listener_callback_safe,
                 10)
             
             self.subscription_hunter_position = self.create_subscription(
                 String,
-                '/hunter_position',
+                self.get_parameter('TOPICS.hunter_position').value,
                 self._listener_hunter_position_callback_safe,
                 10
             )
+
+            self.subscription_TDLAS_ready = self.create_subscription(
+                Bool,
+                self.get_parameter('TOPICS.tdlas_ready').value,
+                self._listener_TDLAS_ready_callback_safe,
+                10
+            )
+
+            self.subscription_TDLAS_data = self.create_subscription(
+                String,
+                self.get_parameter('TOPICS.tdlas_data').value,
+                self._listener_TDLAS_data_callback_safe,
+                10
+            )
+
+            self.publisher_Hunter_initialized = self.create_publisher(String, 
+                                                                      self.get_parameter('TOPICS.initialize_hunter').value,
+                                                                      10)
+            self.publisher_start_simulation = self.create_publisher(String,
+                                                                    self.get_parameter('TOPICS.start_hunter').value,
+                                                                    10)
+
             self._initialized = True
             self.get_logger().info('MethaneScanNode initialized successfully')
         except Exception as e:
             self.get_logger().error(f'Failed to initialize MethaneScanNode: {str(e)}')
             traceback.print_exc()
             self._initialized = False
+
+    def declare_parameters_ros(self):
+        self.declare_parameter('TOPICS.ptu_ready', "/PTU_ready")
+        self.declare_parameter('TOPICS.hunter_position', "/hunter_position")
+        self.declare_parameter('TOPICS.tdlas_ready', "/TDLAS_ready")
+        self.declare_parameter('TOPICS.tdlas_data', "/TDLAS_data")
+        self.declare_parameter('TOPICS.initialize_hunter', "/initialize_hunter_params")
+        self.declare_parameter('TOPICS.start_hunter', "/start_simulation")
     
-    def register_callbacks(self, ptu_ready_callback, hunter_position_callback):
+    def register_callbacks(self, ptu_ready_callback, hunter_position_callback, TDLAS_ready_callback, TDLAS_data_callback):
         """Register callbacks with thread-safe protection."""
         with self._lock:
             self._callback_ptu_ready = ptu_ready_callback
             self._callback_hunter_position = hunter_position_callback
+            self._callback_TDLAS_ready = TDLAS_ready_callback
+            self._callback_TDLAS_data = TDLAS_data_callback
             self._callbacks_registered = True
             self.get_logger().info('Callbacks registered successfully')
             
@@ -86,6 +131,9 @@ class MethaneScanNode(Node):
             
             if self._hunter_position_received and self._last_hunter_position is not None:
                 self.signals.hunter_position_signal.emit(self._last_hunter_position)
+
+            if self._TDLAS_ready_received and self._last_TDLAS_ready is not None:
+                self.signals.TDLAS_ready_signal.emit(self._last_TDLAS_ready)
     
     def _listener_callback_safe(self, msg):
         """Thread-safe wrapper for PTU ready message callback."""
@@ -101,6 +149,22 @@ class MethaneScanNode(Node):
             self.signals.ptu_ready_signal.emit(msg.data)
         except Exception as e:
             self.signals.log_message_signal.emit('error', f'Error in PTU ready callback: {str(e)}')
+            traceback.print_exc()
+
+    def _listener_TDLAS_ready_callback_safe(self, msg):
+        """Thread-safe wrapper for PTU ready message callback."""
+        if not self._node_running or not self._subscriptions_active:
+            return
+        
+        try:
+            with self._lock:
+                self._last_TDLAS_ready = msg.data
+                self._TDLAS_ready_received = True
+            
+            self.signals.log_message_signal.emit('info', f'Received TDLAS ready message: {msg.data}')
+            self.signals.TDLAS_ready_signal.emit(msg.data)
+        except Exception as e:
+            self.signals.log_message_signal.emit('error', f'Error in TDLAS ready callback: {str(e)}')
             traceback.print_exc()
     
     def _listener_hunter_position_callback_safe(self, msg):
@@ -123,6 +187,25 @@ class MethaneScanNode(Node):
             self.signals.log_message_signal.emit('error', f'Error in hunter position callback: {str(e)}')
             traceback.print_exc()
     
+    def _listener_TDLAS_data_callback_safe(self, msg):
+        """Thread-safe wrapper for TDLAS data message callback."""
+        if not self._node_running or not self._subscriptions_active:
+            return
+        
+        try:
+            data = json.loads(msg.data)
+            
+            with self._lock:
+                self._last_TDLAS_data = data
+            
+            self.signals.log_message_signal.emit('info', f'Received TDLAS data message: {data}')
+            self.signals.TDLAS_data_signal.emit(data)
+        except json.JSONDecodeError:
+            self.signals.log_message_signal.emit('error', f'Invalid JSON in TDLAS data message: {msg.data}')
+        except Exception as e:
+            self.signals.log_message_signal.emit('error', f'Error in TDLAS data callback: {str(e)}')
+            traceback.print_exc()
+    
     def _handle_ptu_ready_qt(self, ptu_ready):
         """Qt thread handler for PTU ready signal."""
         try:
@@ -131,6 +214,16 @@ class MethaneScanNode(Node):
             self.get_logger().info(f'PTU ready: {ptu_ready}')
         except Exception as e:
             self.get_logger().error(f'Error handling PTU ready in Qt thread: {str(e)}')
+            traceback.print_exc()
+        
+    def _handle_TDLAS_ready_qt(self, TDLAS_ready):
+        """Qt thread handler for TDLAS ready signal."""
+        try:
+            if self._callbacks_registered and self._callback_TDLAS_ready:
+                self._callback_TDLAS_ready(TDLAS_ready)
+            self.get_logger().info(f'TDLAS ready: {TDLAS_ready}')
+        except Exception as e:
+            self.get_logger().error(f'Error handling TDLAS ready in Qt thread: {str(e)}')
             traceback.print_exc()
     
     def _handle_hunter_position_qt(self, position):
@@ -157,6 +250,16 @@ class MethaneScanNode(Node):
         except Exception as e:
             # Last resort error handling
             print(f"Error in logging: {str(e)} - Original message: {message}")
+    
+    def _handle_TDLAS_data_qt(self, data):
+        """Qt thread handler for TDLAS data signal."""
+        try:
+            if self._callbacks_registered and self._callback_TDLAS_data:
+                self._callback_TDLAS_data(data)
+            self.get_logger().info(f'TDLAS data received: {data}')
+        except Exception as e:
+            self.get_logger().error(f'Error handling TDLAS data in Qt thread: {str(e)}')
+            traceback.print_exc
     
     def pause_subscriptions(self):
         """Pause processing of incoming messages."""
@@ -232,7 +335,9 @@ def main(args=None):
         # Register callbacks in a thread-safe way
         node.register_callbacks(
             ptu_ready_callback=controller.update_PTU_ready,
-            hunter_position_callback=controller.update_hunter_position
+            hunter_position_callback=controller.update_hunter_position,
+            TDLAS_ready_callback=controller.update_TDLAS_ready,
+            TDLAS_data_callback=controller.update_TDLAS_data
         )
         
         # Set up Qt heartbeat timer for clean shutdown and responsive UI

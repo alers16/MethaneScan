@@ -6,7 +6,9 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QIcon, QPixmap, QPalette, QColor
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtGui import QDoubleValidator
 from methane_scan import qresources_rc # type: ignore
+from methane_scan.views.utils.validators import PositiveDoubleValidator
 
 class RobotConfigWidget(QWidget):
     position_saved = pyqtSignal(tuple)
@@ -65,7 +67,6 @@ class RobotConfigWidget(QWidget):
         config_layout.addWidget(position_group)
 
         # Velocidad del Robot
-        # Velocidad del Robot
         speed_group = QGroupBox("Velocidad")
         speed_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         speed_group_layout = QGridLayout(speed_group)
@@ -84,9 +85,15 @@ class RobotConfigWidget(QWidget):
         self.save_speed.clicked.connect(self._save_speed)
         self.speed_edit.textChanged.connect(self._check_fields)
 
+        self.error_label = QLabel("La velocidad debe ser mayor que 0")
+        self.error_label.setStyleSheet("color: red; font-size: 10pt;")
+        self.error_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.error_label.hide()
+
         speed_group_layout.addWidget(speed_label, 0, 0)
         speed_group_layout.addWidget(self.speed_edit, 0, 1)
-        speed_group_layout.addWidget(self.save_speed, 1, 0, 1, 2)
+        speed_group_layout.addWidget(self.save_speed, 2, 0, 1, 2)
+        speed_group_layout.addWidget(self.error_label, 1, 0, 1, 2)
         config_layout.addWidget(speed_group)
 
         operative_layout = QHBoxLayout()
@@ -103,8 +110,7 @@ class RobotConfigWidget(QWidget):
         circle_label.setStyleSheet(f"background-color: #f0f0f0; border-radius: 10px;")
         operative_layout.addWidget(circle_label)
 
-        state = "Operativo"
-        state = "Operativo"
+        state = "No se encuentra: 'Velocidad', 'Posición', 'Trayectoria'"
         self.state_label = QLabel(f"Estado: {state}")
         self.state_label.setStyleSheet("font-size: 14pt;")
         self.state_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -135,11 +141,18 @@ class RobotConfigWidget(QWidget):
     
     def _apply_changes(self):
         if self.speed:
+            if not self.speed_edit.text().strip():
+                self.speed_edit.setText(str(self.speed))
+                self.speed_edit.setReadOnly(True)
+                self.save_speed.setText("Cambiar Velocidad")
+                self.save_speed.clicked.connect(self._activate_edit)
             self.speed_saved.emit(self.speed)
+        else:
+            self.speed_saved.emit(0.0)
     
     def _save_speed(self):
         try:
-            self.speed = float(self.speed_edit.text())
+            self.speed = float(self.speed_edit.text()) if self.speed_edit.text() != "" else 0.0
             self.speed_edit.setReadOnly(True)
             self.save_speed.setText("Cambiar Velocidad")
             self.save_speed.clicked.connect(self._activate_edit)
@@ -150,7 +163,12 @@ class RobotConfigWidget(QWidget):
     def _check_fields(self):
         # Habilita el botón si ambos campos tienen texto
         if self.speed_edit.text().strip():
-            self.save_speed.setDisabled(False)
+            if float(self.speed_edit.text()) <= 0:
+                self.error_label.show()
+                self.save_speed.setDisabled(True)
+            else:
+                self.error_label.hide()
+                self.save_speed.setDisabled(False)
         else:
             self.save_speed.setDisabled(True)
     

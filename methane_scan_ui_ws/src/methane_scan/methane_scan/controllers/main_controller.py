@@ -1,13 +1,14 @@
 
+import json
 from methane_scan.views.main_window import MainWindow # type: ignore
 from methane_scan.views.pages.ptu_config import PTUConfigWidget # type: ignore
 
 from PyQt5.QtCore import QMetaObject, Qt, QTimer
+from std_msgs.msg import String as ROSString
 import traceback
 
 class MainController():
     def __init__(self, node):
-        """Initialize the controller with required components and state"""
         self.node = node
         self.initialized = False
         self.widgets_connected = False
@@ -27,18 +28,17 @@ class MainController():
             self.view = None
 
     def _init_parameters(self):
-        """Initialize state parameters with default values"""
         self.PTU_position = None
         self.path = []  
         self.PTU_ready = False
         self.robot_speed = None
         self.robot_position = None
-        # Add state tracking
+        self.TDLAS_ready = False
+    
         self.ptu_configured = False
         self.robot_configured = False
 
     def _connect_events(self):
-        """Connect all UI events to their respective handlers with error handling"""
         if self.view is None:
             self.node.get_logger().error("Cannot connect events: view is not initialized")
             return
@@ -213,7 +213,8 @@ class MainController():
                 self.view.methane_scan_tab.map_frame.drawPTUMarker(position[0], position[1])
             else:
                 self.node.get_logger().warn("Could not update map: UI components not available")
-                
+
+            self.check_publish()    
             self.check_PTU_ready()
         except Exception as e:
             self.node.get_logger().error(f"Error updating PTU position: {str(e)}")
@@ -235,10 +236,24 @@ class MainController():
             if PTU_ready is None:
                 self.node.get_logger().warn("Received null PTU_ready status")
                 return
-                
+            
             self.node.get_logger().info(f"PTU ready status updated: {PTU_ready}")
             self.PTU_ready = PTU_ready
             self.check_PTU_ready()
+        except Exception as e:
+            self.node.get_logger().error(f"Error updating PTU ready status: {str(e)}")
+            traceback.print_exc()
+
+    def update_TDLAS_ready(self, TDLAS_ready):
+        """Update TDLAS ready status with error handling"""
+        try:
+            if TDLAS_ready is None:
+                self.node.get_logger().warn("Received null TDLAS_ready status")
+                return
+            
+            self.node.get_logger().info(f"PTU ready status updated: {TDLAS_ready}")
+            self.TDLAS_ready = TDLAS_ready
+            self.check_TDLAS_ready()
         except Exception as e:
             self.node.get_logger().error(f"Error updating PTU ready status: {str(e)}")
             traceback.print_exc()
@@ -270,7 +285,8 @@ class MainController():
                 self.node.get_logger().warn("Could not update map: UI components not available")
             
             # Update robot ready status
-            self.check_Robot_ready()
+            if not self.robot_configured:
+                self.check_Robot_ready()
         except Exception as e:
             self.node.get_logger().error(f"Error updating hunter position: {str(e)}")
             traceback.print_exc()
@@ -288,6 +304,51 @@ class MainController():
         except Exception as e:
             self.node.get_logger().error(f"Error updating path: {str(e)}")
             traceback.print_exc()
+    
+    def update_TDLAS_data(self, data):
+        """Update TDLAS data with error handling"""
+        try:
+            if data is None:
+                self.node.get_logger().warn("Received null TDLAS data")
+                return
+                
+            self.node.get_logger().info(f"Datos de TDLAS actualizados: {data}")
+            # Update TDLAS data in UI if available
+            if (self.view is not None and 
+                hasattr(self.view, 'methane_scan_tab') and 
+                self.view.methane_scan_tab is not None):
+
+                positions = [(self.PTU_position[0], self.PTU_position[1]), (self.robot_position['lat'], self.robot_position['lng'])]
+                opacity = 0.9 * (data.get('average_ppmxm', 0) / 150.0) + 0.1
+                
+                self.view.methane_scan_tab.map_frame.drawBeam(positions, opacity)
+            else:
+                self.node.get_logger().warn("Could not update TDLAS data: UI components not available")
+        except Exception as e:
+            self.node.get_logger().error(f"Error updating TDLAS data: {str(e)}")
+            traceback.print_exc
+
+    def check_TDLAS_ready(self):
+        """Check TDLAS readiness with proper widget availability checks"""
+        try:
+            self.node.get_logger().info(f"Ha llegado: {self.TDLAS_ready}")
+
+            # Check if view and UI components are available
+            if self.view is None:
+                self.node.get_logger().error("Cannot check TDLAS ready: view is not initialized")
+                return
+            has_methane_scan_tab = (hasattr(self.view, 'methane_scan_tab') and
+                                    self.view.methane_scan_tab is not None)
+            
+            # Update TDLAS status based on current state
+            if self.TDLAS_ready:
+                if has_methane_scan_tab:
+                    self.view.methane_scan_tab.set_device_status("TDLAS", True)
+                    self.check_all_ready()
+        except Exception as e:
+            self.node.get_logger().error(f"Error checking TDLAS ready: {str(e)}")
+            traceback.print_exc()
+        
 
     def check_PTU_ready(self):
         """Check PTU readiness with proper widget availability checks"""
@@ -311,6 +372,7 @@ class MainController():
                 
                 if has_methane_scan_tab:
                     self.view.methane_scan_tab.set_device_status("PTU", True)
+                    self.check_all_ready()
                 if has_ptu_config_widget:
                     self.view.ptu_config_widget.set_state("Operativo")
             elif (self.PTU_position is not None):
@@ -320,6 +382,7 @@ class MainController():
                     self.view.methane_scan_tab.set_device_status("PTU", False, ["Confirmación"])
                 if has_ptu_config_widget:
                     self.view.ptu_config_widget.set_state("No se ha confirmado la posición")
+                
             else:
                 self.node.get_logger().info("PTU no configurado")
                 self.ptu_configured = False
@@ -351,7 +414,7 @@ class MainController():
                 
             missing = []
             
-            if self.robot_speed is None:
+            if self.robot_speed <= 0:
                 missing.append("Velocidad")
             
             if self.robot_position is None:
@@ -366,6 +429,8 @@ class MainController():
             # Update UI status
             if not missing:
                 self.view.methane_scan_tab.set_device_status("Robot", True)
+                self.check_publish()
+                self.check_all_ready()
             else:
                 self.view.methane_scan_tab.set_device_status("Robot", False, missing)
                 
@@ -381,3 +446,55 @@ class MainController():
         except Exception as e:
             self.node.get_logger().error(f"Error checking Robot ready: {str(e)}")
             traceback.print_exc()
+
+    def check_all_ready(self):
+        """Check all devices readiness"""
+        ready = (self.ptu_configured and self.robot_configured and self.TDLAS_ready)
+        try:
+            self.node.get_logger().info(f"Todo listo: {ready}")
+            if ready:
+                # Check if view is available
+                if self.view is None:
+                    self.node.get_logger().error("Cannot check Robot ready: view is not initialized")
+                    return
+                    
+                # Check if methane_scan_tab is available
+                has_methane_scan_tab = (hasattr(self.view, 'methane_scan_tab') and 
+                                    self.view.methane_scan_tab is not None)
+                
+                # Update UI status
+                if has_methane_scan_tab:
+                    self.view.methane_scan_tab.enableStartButton(self.test_start)
+        except Exception as e:
+            self.node.get_logger().error(f"Error checking all ready: {str(e)}")
+            traceback.print_exc()
+        
+    def check_publish(self):
+        """Check if all data is ready to publish"""
+        try:
+            if self.PTU_position and len(self.path) > 0 and self.robot_speed > 0:
+                self.node.get_logger().info("Listo para publicar")
+
+                # Publish /initialize_hunter_params
+                info = {
+                    "vel": self.robot_speed, 
+                    "point_ptu": {"latitude_ptu": self.PTU_position[0], 
+                                  "longitude_ptu": self.PTU_position[1]},
+                    "points": self.path
+                }
+                json_info = json.dumps(info)
+                msg = ROSString()
+                msg.data = json_info
+                self.node.publisher_Hunter_initialized.publish(msg)
+                self.node.get_logger().info(f"Publicado /initialize_hunter_params: {json_info}")
+        except Exception as e:
+            self.node.get_logger().error(f"Error checking publish readiness: {str(e)}")
+            traceback.print_exc()
+
+    def test_start(self):
+        """Test start button callback"""
+        self.node.get_logger().info("Botón de inicio presionado")
+        msg = ROSString()
+        msg.data = json.dumps({"path": self.path, "speed": self.robot_speed})
+        self.node.publisher_start_simulation.publish(msg)
+

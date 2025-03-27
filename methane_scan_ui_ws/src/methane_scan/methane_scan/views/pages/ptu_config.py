@@ -119,7 +119,7 @@ class PTUConfigWidget(QWidget):
         circle_label.setStyleSheet(f"background-color: #f0f0f0; border-radius: 10px;")
         operative_layout.addWidget(circle_label)
 
-        state = "Operativo"
+        state = "No se encuentra: 'Confirmación', 'Posición'"
         self.state_label = QLabel(f"Estado: {state}")
         self.state_label.setStyleSheet("font-size: 14pt;")
         self.state_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
@@ -183,10 +183,13 @@ class PTUConfigWidget(QWidget):
         self.rejected.emit()
     
     def _reset_fields(self):
-        self.lat_edit.clear()
-        self.lon_edit.clear()
-        self.PTU_coordinates = None
-        self.save_button.setDisabled(True)
+        if not self.PTU_coordinates:
+            self.lat_edit.clear()
+            self.lon_edit.clear()
+            self.save_button.setDisabled(True)
+            self.lat_edit.setReadOnly(False)
+            self.lon_edit.setReadOnly(False)
+        
     
     def _apply_changes(self):
         #Por ahora asi, luego hay que añadir el guardado de los parametros

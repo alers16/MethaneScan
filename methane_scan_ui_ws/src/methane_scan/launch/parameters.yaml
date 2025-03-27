@@ -1,0 +1,9 @@
+methane_scan_node:
+  ros_parameters:
+    TOPICS:
+      ptu_ready: /PTU_ready
+      hunter_position: /hunter_position
+      tdlas_ready: /TDLAS_ready
+      tdlas_data: /TDLAS_data
+      initialize_hunter: /initialize_hunter_params
+      start_hunter: /start_simulation

@@ -24,6 +24,9 @@ class SatelliteMap(QWebEngineView):
         
         # Conectamos la señal que indica que la página ha terminado de cargar
         self.loadFinished.connect(self._handleLoadFinished)
+
+        self.PTU_coordinates = None
+        self.robot_coordinates = None
         
         # HTML con librería 'drawing' + ocultar POIs/transit
         html = f"""
@@ -46,6 +49,8 @@ class SatelliteMap(QWebEngineView):
               let map;
               let drawingManager;
               let lastUserOverlay = null;
+              let ptuMarker = null;
+              let hunterMarker = null;
 
               let isDrawingEnabled = false;
               
@@ -148,12 +153,12 @@ class SatelliteMap(QWebEngineView):
                 const bounds = lastUserOverlay.getBounds();
                 const sw = bounds.getSouthWest();
                 const ne = bounds.getNorthEast();
-                const nw = {{ lat: ne.lat(), lng: sw.lng() }};
-                const se = {{ lat: sw.lat(), lng: ne.lng() }};
+                const nw = {{ latitude: ne.lat(), longitude: sw.lng() }};
+                const se = {{ latitude: sw.lat(), longitude: ne.lng() }};
                 return [
-                  {{ lat: sw.lat(), lng: sw.lng() }},
+                  {{ latitude: sw.lat(), longitude: sw.lng() }},
                   nw,
-                  {{ lat: ne.lat(), lng: ne.lng() }},
+                  {{ latitude: ne.lat(), longitude: ne.lng() }},
                   se
                 ];
               }}
@@ -162,7 +167,7 @@ class SatelliteMap(QWebEngineView):
               function getCircleCorners() {{
                 const center = lastUserOverlay.getCenter();
                 const radius = lastUserOverlay.getRadius();
-                return {{ center: {{ lat: center.lat(), lng: center.lng() }}, radius: radius }};
+                return {{ center: {{ latitude: center.lat(), longitude: center.lng() }}, radius: radius }};
               }}
 
               // Retorna las esquinas de un polígono
@@ -171,7 +176,7 @@ class SatelliteMap(QWebEngineView):
                 let coords = [];
                 for (let i = 0; i < path.getLength(); i++) {{
                   let latlng = path.getAt(i);
-                  coords.push({{ lat: latlng.lat(), lng: latlng.lng() }});
+                  coords.push({{ latitude: latlng.lat(), longitude: latlng.lng() }});
                 }}
                 return coords;  
               }}
@@ -182,7 +187,7 @@ class SatelliteMap(QWebEngineView):
                 let coords = [];
                 for (let i = 0; i < path.getLength(); i++) {{
                   let latlng = path.getAt(i);
-                  coords.push({{ lat: latlng.lat(), lng: latlng.lng() }});
+                  coords.push({{ latitude: latlng.lat(), longitude: latlng.lng() }});
                 }}
                 return coords;
               }}
@@ -205,17 +210,31 @@ class SatelliteMap(QWebEngineView):
               }}
 
               // Dibuja una polilínea "haz" en color rojo
-              function drawBeam(coordList) {{
+              function drawBeam(coordList, opacity) {{
                 let path = coordList.map(function(c) {{
                   return {{ lat: c[0], lng: c[1] }};
                 }});
                 let beam = new google.maps.Polyline({{
                   path: path,
                   strokeColor: "red",
-                  strokeOpacity: 0.7,
-                  strokeWeight: 2
+                  strokeOpacity: opacity || 1.0,
+                  strokeWeight: 1
                 }});
                 beam.setMap(map);
+              }}
+
+              function deletePTUMarker() {{
+                if (ptuMarker) {{
+                  ptuMarker.setMap(null);
+                  ptuMarker = null;
+                }}
+              }}
+
+              function deleteHunterMarker() {{
+                if (hunterMarker) {{
+                  hunterMarker.setMap(null);
+                  hunterMarker = null;
+                }}
               }}
 
 
@@ -227,6 +246,7 @@ class SatelliteMap(QWebEngineView):
                   // Opcional: Puedes definir un icono personalizado
                   icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
                 }});
+                ptuMarker = marker;
               }}
 
               function drawHunterMarker(lat, lng) {{
@@ -236,7 +256,9 @@ class SatelliteMap(QWebEngineView):
                   title: "Hunter",
                   // Opcional: Puedes definir un icono personalizado
                   icon: "http://maps.google.com/mapfiles/ms/icons/red-dot.png"
-                }});
+                }}
+                );
+                hunterMarker = marker
               }}
 
             </script>
@@ -269,7 +291,7 @@ class SatelliteMap(QWebEngineView):
         code = "getCorners();"
         self.page().runJavaScript(code, callback)
 
-    def drawBeam(self, coords):
+    def drawBeam(self, coords, opacity=1.0):
         """
         coords: lista de tuplas (lat, lng), ej: [(lat1, lng1), (lat2, lng2), ...]
         """
@@ -278,7 +300,7 @@ class SatelliteMap(QWebEngineView):
             self._pendingBeams.append(coords)
         else:
             # Ya está cargado, dibujamos directamente
-            self._execDrawBeam(coords)
+            self._execDrawBeam(coords, opacity)
     
     def drawPTUMarker(self, lat, lng):
         """Dibuja un marcador en la posición especificada."""
@@ -286,8 +308,11 @@ class SatelliteMap(QWebEngineView):
             # Todavía no ha cargado, encolamos
             self._pendingMarkers.append((lat, lng))
         else:
+          if self.PTU_coordinates:
+            self.deletePTUMarker()
           code = f"drawPTUMarker({lat}, {lng});"
           self.page().runJavaScript(code)
+          self.PTU_coordinates = (lat, lng)
 
     def drawRobotMarker(self, lat, lng):
         """Dibuja un marcador en la posición especificada."""
@@ -295,14 +320,21 @@ class SatelliteMap(QWebEngineView):
             # Todavía no ha cargado, encolamos
             self._pendingMarkers.append((lat, lng))
         else:
+          if self.robot_coordinates:
+            self.deleteHunterMarker()
           code = f"drawHunterMarker({lat}, {lng});"
           self.page().runJavaScript(code)
+          self.robot_coordinates = (lat, lng)
+      
+    def clearSelection(self):
+        """Elimina la figura dibujada por el usuario (si existe)"""
+        code = "clearUserOverlay();"
+        self.page().runJavaScript(code)
 
-
-    def _execDrawBeam(self, coords):
+    def _execDrawBeam(self, coords, opacity=1.0):
         # Llama a la función JS drawBeam(coordList)
         js_array = str([[c[0], c[1]] for c in coords])  # [[lat, lng], [lat, lng], ...]
-        code = f"drawBeam({js_array});"
+        code = f"drawBeam({js_array}, {opacity});"
         self.page().runJavaScript(code)
 
     def enableDrawing(self):
@@ -318,3 +350,11 @@ class SatelliteMap(QWebEngineView):
     def clearUserOverlay(self):
         """Elimina la figura dibujada por el usuario (si existe)"""
         self.page().runJavaScript("clearUserOverlay();")
+
+    def deletePTUMarker(self):
+        """Elimina el marcador PTU (si existe)"""
+        self.page().runJavaScript("deletePTUMarker();")
+    
+    def deleteHunterMarker(self):
+        """Elimina el marcador Hunter (si existe)"""
+        self.page().runJavaScript("deleteHunterMarker();")
