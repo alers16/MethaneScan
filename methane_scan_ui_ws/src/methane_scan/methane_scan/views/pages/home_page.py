@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QTableWidget,
-    QTableWidgetItem, QHeaderView, QSizePolicy, QGraphicsScene
+    QTableWidgetItem, QHeaderView, QSizePolicy, QGraphicsScene, QDialogButtonBox, QGroupBox, QLineEdit, QGridLayout
 )
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from methane_scan.views.components.map_view import SatelliteMap # type: ignore
@@ -49,7 +49,7 @@ class HomePage(QWidget):
         map_layout.addLayout(map_title_layout)
         
         map_label = QLabel("Mapa de inspección")
-        map_label.setStyleSheet("font-weight: bold; font-size: 14pt;")
+        map_label.setStyleSheet("font-weight: bold; font-size: 16pt;")
         map_title_layout.addWidget(map_label)
         map_title_layout.addStretch()
         
@@ -79,29 +79,189 @@ class HomePage(QWidget):
         
         # 2b) Zona de Control
         control_frame = QFrame()
-        control_frame.setObjectName("controlZone")
+        control_frame.setObjectName("controlZone")  # Usamos el mismo estilo "card" que tus DeviceCards
         control_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        control_frame.setMaximumWidth(400)  # Ancho máximo para la zona de control
         center_layout.addWidget(control_frame, stretch=1)
-        
+
         control_layout = QVBoxLayout(control_frame)
-        control_layout.setContentsMargins(10, 10, 10, 10)
-        
-        control_title = QLabel("Zona de Control")
-        control_title.setStyleSheet("font-weight: bold; font-size: 14pt;")
-        control_layout.addWidget(control_title)
-        
-        # Últimas datas obtenidas
-        recent_data_label = QLabel("Últimas Datas Obtenidas")
-        recent_data_label.setStyleSheet("font-weight: bold; margin-top: 10px; font-size: 8pt;")
-        control_layout.addWidget(recent_data_label)
-        
-        laser_label = QLabel("Laser: 6.2 ppm")
-        wind_label = QLabel("Medidor de viento: 2.3 m/s")
-        error_label = QLabel("Porcentaje de error: 2.5%")
-        
-        control_layout.addWidget(laser_label)
-        control_layout.addWidget(wind_label)
-        control_layout.addWidget(error_label)
+        # Márgenes algo más amplios para dar sensación de "aire":
+        control_layout.setContentsMargins(15, 15, 15, 15)
+        control_layout.setSpacing(12)
+
+        # --- Encabezado con icono y título ---
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(8)
+
+        header_title = QLabel("Zona de Control")
+        header_title.setStyleSheet("""
+            font-weight: bold; 
+            font-size: 16pt; 
+            color: #FFFFFF;
+        """)
+        header_layout.addWidget(header_title)
+        header_layout.addStretch()
+        control_layout.addLayout(header_layout)
+
+        # Separador horizontal sutil
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        control_layout.addWidget(separator)
+
+        # --- Bloque de datos (Podemos usar un QFrame "interior") ---
+        data_frame = QFrame()
+        data_frame.setObjectName("controlDataFrame")  # Podríamos aplicar estilo propio si deseamos
+        data_layout = QVBoxLayout(data_frame)
+        data_layout.setContentsMargins(5, 5, 5, 5)
+        data_layout.setSpacing(6)
+
+        # Título pequeño (sub-sección)
+        recent_data_title = QLabel("Últimas Datas Obtenidas")
+        recent_data_title.setStyleSheet("font-weight: bold; font-size: 14pt; margin-bottom: 6px;")
+        data_layout.addWidget(recent_data_title)
+
+        self.methane_label = QLabel("Medición de Metano: N/A")
+        self.reflection_label = QLabel("Fuerza de Reflexión: N/A")
+        self.absortion_label = QLabel("Fuerza de Absorción: N/A")
+        self.absortion_label.setContentsMargins(0, 0, 0, 20)
+
+        # Añadimos los labels al layout interno
+        data_layout.addWidget(self.methane_label)
+        data_layout.addWidget(self.reflection_label)
+        data_layout.addWidget(self.absortion_label)
+
+        position_group = QGroupBox("Posición del Robot:")
+        position_group.setStyleSheet("font-size: 14pt;")
+        position_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        position_group.setContentsMargins(0, 0, 0, 70)
+        position_group_layout = QGridLayout(position_group)
+        position_group_layout.setContentsMargins(10, 10, 10, 10)
+        position_group_layout.setHorizontalSpacing(10)
+        position_group_layout.setVerticalSpacing(10)
+        position_group_layout.setAlignment(Qt.AlignLeft)
+
+        self.robot_lat_label = QLabel("Latitud: N/A")
+        self.robot_lat_label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
+        self.robot_lon_label = QLabel("Longitud: N/A")
+        self.robot_lon_label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
+
+        position_group_layout.addWidget(self.robot_lat_label, 0, 0)
+        position_group_layout.addWidget(self.robot_lon_label, 1, 0)
+
+        for lbl in [self.methane_label, self.reflection_label, self.absortion_label, self.robot_lat_label, self.robot_lon_label]:
+            # Ajustamos un estilo unificado
+            lbl.setStyleSheet("font-size: 12pt; color: #DDDDDD; margin-bottom: 2px;")
+
+
+        data_layout.addWidget(position_group)
+
+        legend_group = QGroupBox("Leyenda")
+        legend_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        legend_group.setStyleSheet("font-size: 14pt;")
+        legend_layout = QHBoxLayout(legend_group)
+        legend_layout.setContentsMargins(10, 10, 10, 10)
+        legend_layout.setSpacing(10)
+
+        #
+        # 1) Leyenda de PTU
+        #
+        ptu_layout = QVBoxLayout()
+        ptu_layout.setSpacing(8)
+        ptu_layout.setAlignment(Qt.AlignCenter)
+
+        ptu_color_label = QLabel()
+        ptu_color_label.setFixedSize(20, 20)
+        # Ejemplo: un verde para el PTU
+        ptu_color_label.setStyleSheet("""
+            background-color: #2196F3; /* Verde PTU */
+            border: 1px solid #444444;
+            border-radius: 10px; 
+        """)
+
+        ptu_text_label = QLabel("PTU")
+        ptu_text_label.setStyleSheet("font-size: 10pt; color: #DDDDDD;")
+
+        ptu_layout.addWidget(ptu_color_label, 0, Qt.AlignCenter)
+        ptu_layout.addWidget(ptu_text_label, 0, Qt.AlignCenter)
+        legend_layout.addLayout(ptu_layout)
+
+        #
+        # 2) Leyenda de “Hunter” o Robot
+        #
+        robot_layout = QVBoxLayout()
+        robot_layout.setSpacing(4)
+        robot_layout.setAlignment(Qt.AlignCenter)
+
+        robot_color_label = QLabel()
+        robot_color_label.setFixedSize(20, 20)
+        # Ejemplo: un azul para el Robot/Hunter
+        robot_color_label.setStyleSheet("""
+            background-color: #fd7567; /* Azul Robot */
+            border: 1px solid #444444;
+            border-radius: 10px;
+        """)
+
+        robot_text_label = QLabel("Robot")
+        robot_text_label.setStyleSheet("font-size: 10pt; color: #DDDDDD;")
+
+        robot_layout.addWidget(robot_color_label, 0, Qt.AlignCenter)
+        robot_layout.addWidget(robot_text_label, 0, Qt.AlignCenter)
+        legend_layout.addLayout(robot_layout)
+
+        #
+        # 3) Barra de gradiente TDLAS (0 - 150 ppm·m)
+        #   En horizontal
+        #
+        tdlas_layout = QVBoxLayout()
+        tdlas_layout.setSpacing(4)
+        tdlas_layout.setAlignment(Qt.AlignCenter)
+
+        # Sub-layout para la escala
+        tdlas_scale_layout = QHBoxLayout()
+        tdlas_scale_layout.setSpacing(5)
+        tdlas_scale_layout.setAlignment(Qt.AlignCenter)
+
+        label_0 = QLabel("0")
+        label_0.setStyleSheet("font-size: 10pt; color: #DDDDDD;")
+
+        # Barra con gradiente horizontal de blanco a rojo
+        color_scale_frame = QFrame()
+        color_scale_frame.setFixedSize(100, 15)
+        color_scale_frame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(
+                    spread:pad, x1:0, y1:0.5, x2:1, y2:0.5,
+                    stop:0 rgba(255,255,255,255),
+                    stop:1 rgba(255,0,0,255)
+                );
+                border: 1px solid #444444;
+                border-radius: 4px;
+            }
+        """)
+
+        label_150 = QLabel("150")
+        label_150.setStyleSheet("font-size: 10pt; color: #DDDDDD;")
+
+        tdlas_scale_layout.addWidget(label_0)
+        tdlas_scale_layout.addWidget(color_scale_frame)
+        tdlas_scale_layout.addWidget(label_150)
+
+        tdlas_label = QLabel("ppm·m")
+        tdlas_label.setStyleSheet("font-size: 10pt; color: #DDDDDD;")
+
+        tdlas_layout.addLayout(tdlas_scale_layout)
+        tdlas_layout.addWidget(tdlas_label, 0, Qt.AlignCenter)
+
+        legend_layout.addLayout(tdlas_layout)
+
+        data_layout.addWidget(legend_group)
+
+        data_frame.setLayout(data_layout)
+        control_layout.addWidget(data_frame)
+
+
+        # Un estirador para “empujar” los botones al final
         control_layout.addStretch()
 
         # -- Botones Iniciar y Abortar --
@@ -115,6 +275,12 @@ class HomePage(QWidget):
         self.btn_abortar.setObjectName("btnAbortar")
         self.btn_abortar.setDisabled(True)
 
+        self.not_ready_label = QLabel("Nota: Todos los dispositivos deben estar listos para iniciar.")
+        self.not_ready_label.setStyleSheet("font-size: 10pt; color: red;")
+        self.not_ready_label.setAlignment(Qt.AlignCenter)
+        self.not_ready_label.setContentsMargins(0, 0, 0, 10)
+        control_layout.addWidget(self.not_ready_label)
+        
         buttons_layout.addWidget(self.btn_iniciar)
         buttons_layout.addWidget(self.btn_abortar)
         control_layout.addLayout(buttons_layout)
@@ -144,8 +310,7 @@ class HomePage(QWidget):
         #table.setItem(2, 2, QTableWidgetItem("12:10:00"))
         #
         #layout.addWidget(table, stretch=1)
-
-    
+   
     def register_ptu_config_callback(self, callback):
         """Permite registrar un callback que se ejecutará al hacer clic en la card PTU."""
         # Usamos una lambda para ignorar el argumento 'event' y llamar al callback inyectado
@@ -199,5 +364,20 @@ class HomePage(QWidget):
         else:
             raise ValueError("Dispositivo no reconocido")
     
+    def set_tdlas_data(self, data):
+        self.methane_label.setText(f"Medición de Metano: {data['average_ppmxm']}")
+        self.reflection_label.setText(f"Fuerza de Reflexión: {data['average_reflection_strength']}")
+        self.absortion_label.setText(f"Fuerza de Absorción: {data['average_absorption_strength']}")
     
-
+    def set_robot_position(self, position):
+        lat  = position.get("lat", 0)
+        lng  = position.get("lng", 0)
+        self.robot_lat_label.setText(f"Latitud: {lat}")
+        self.robot_lon_label.setText(f"Longitud: {lng}")
+        self.map_frame.drawRobotMarker(lat, lng)
+    
+    def set_ready(self, ready):
+        if ready:
+            self.not_ready_label.setVisible(False)
+        else:
+            self.not_ready_label.setVisible(True)

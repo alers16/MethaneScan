@@ -4,6 +4,7 @@ from std_msgs.msg import Bool, String
 import json
 import math
 import random
+import time
 
 class PTUReadyPublisher(Node):
     def __init__(self):
@@ -11,18 +12,20 @@ class PTUReadyPublisher(Node):
         # Creamos el publisher para el tópico /PTU_ready
         self.publisher_ = self.create_publisher(Bool, '/PTU_ready', 10)
         # Timer para publicar a 1 Hz (cada segundo)
-        self.timer = self.create_timer(20.0, self.publish_status)
+        self.timer = self.create_timer(10.0, self.publish_status)
 
         self.publisher_hunter = self.create_publisher(String, '/hunter_position', 10)
-        self.timer_hunter = self.create_timer(20.0, self.publish_hunter)
+        self.timer_hunter = self.create_timer(10.0, self.publish_hunter)
 
         self.publisher_TDLAS_ready = self.create_publisher(Bool, '/TDLAS_ready', 10)
-        self.timer_TDLAS = self.create_timer(10.0, self.publish_TDLAS_status)
+        self.timer_TDLAS = self.create_timer(5.0, self.publish_TDLAS_status)
 
         self.publisher_TDLAS_data = self.create_publisher(String, '/TDLAS_data', 10)
 
         self.subscriber_start = self.create_subscription(String, '/start_simulation', 
                                                          self.start_simulation, 10)
+        
+        self.publisher_end_simulation = self.create_publisher(Bool, '/end_simulation', 10)
         
         # Flag to track if cleanup has been performed
         self._cleanup_done = False
@@ -120,10 +123,31 @@ class PTUReadyPublisher(Node):
 
             msg_TDLAS =  String()
             probability = random.randint(0, 10)
-            if probability < 6:
-                msg_TDLAS.data = json.dumps({"average_ppmxm": random.randint(0, 20)})
+            current_time = time.time()
+            sec = int(current_time)
+            nanosec = int((current_time - sec) * 1e9)
+            tdlas_dict = {
+                'header': {
+                    'stamp': {
+                        'sec': sec,
+                        'nanosec': nanosec
+                    },
+                    'frame_id': 2
+                },
+                'average_ppmxm': random.randint(0, 100),
+                'average_reflection_strength':  random.randint(0, 100),
+                'average_absorption_strength': random.randint(0, 100),
+                'ppmxm': [],  # Si es un array
+                'reflection_strength': [],
+                'absorption_strength': []
+            }
+            if probability < 7:
+                tdlas_dict['average_ppmxm'] = random.randint(0, 20)
+                msg_TDLAS.data = json.dumps(tdlas_dict)
             else:
-                msg_TDLAS.data = json.dumps({"average_ppmxm": random.randint(76, 150)})
+                tdlas_dict['average_ppmxm'] = random.randint(76, 150)
+                msg_TDLAS.data = json.dumps(tdlas_dict)
+                
             self.publisher_TDLAS_data.publish(msg_TDLAS)
             self.get_logger().info(f'Publicado /TDLAS_data: {msg_TDLAS.data}')
             
@@ -151,6 +175,9 @@ class PTUReadyPublisher(Node):
                         self.segment_duration = 0.1
         else:
             self.get_logger().info("Simulación completada")
+            msg_end = Bool()
+            msg_end.data = True
+            self.publisher_end_simulation.publish(msg_end)
             self.timer.cancel()
             self.timer = None
 

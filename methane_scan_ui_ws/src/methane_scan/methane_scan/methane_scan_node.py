@@ -21,6 +21,7 @@ class RosQtSignals(QtCore.QObject):
     TDLAS_ready_signal = QtCore.pyqtSignal(bool)
     TDLAS_data_signal = QtCore.pyqtSignal(dict)
     log_message_signal = QtCore.pyqtSignal(str, str)  # level, message
+    end_simulation_signal = QtCore.pyqtSignal(bool)
 
 class MethaneScanNode(Node):
     """ROS2 node with thread-safety and proper resource management for MethaneScan."""
@@ -56,6 +57,7 @@ class MethaneScanNode(Node):
         self._callback_hunter_position: Optional[Callable[[Dict[str, Any]], None]] = None
         self._callback_TDLAS_ready: Optional[Callable[[bool], None]] = None
         self._callback_TDLAS_data: Optional[Callable[[Dict[str, Any]], None]] = None
+        self._callback_end_simulation: Optional[Callable[[bool], None]] = None
         
         # Connect Qt signals to thread-safe handler methods
         self.signals.ptu_ready_signal.connect(self._handle_ptu_ready_qt)
@@ -63,6 +65,7 @@ class MethaneScanNode(Node):
         self.signals.TDLAS_ready_signal.connect(self._handle_TDLAS_ready_qt)
         self.signals.log_message_signal.connect(self._handle_log_message_qt)
         self.signals.TDLAS_data_signal.connect(self._handle_TDLAS_data_qt)
+        self.signals.end_simulation_signal.connect(self._handle_end_simulation_qt)
         
         # Create subscriptions and publishers with proper error handling
         try:
@@ -93,6 +96,13 @@ class MethaneScanNode(Node):
                 10
             )
 
+            self.subscription_end_simulation = self.create_subscription(
+                Bool,
+                self.get_parameter('TOPICS.end_simulation').value,
+                self._listener_end_simulation_callback_safe,
+                10
+            )
+
             self.publisher_Hunter_initialized = self.create_publisher(String, 
                                                                       self.get_parameter('TOPICS.initialize_hunter').value,
                                                                       10)
@@ -114,14 +124,17 @@ class MethaneScanNode(Node):
         self.declare_parameter('TOPICS.tdlas_data', "/TDLAS_data")
         self.declare_parameter('TOPICS.initialize_hunter', "/initialize_hunter_params")
         self.declare_parameter('TOPICS.start_hunter', "/start_simulation")
+        self.declare_parameter('TOPICS.end_simulation', "/end_simulation")
     
-    def register_callbacks(self, ptu_ready_callback, hunter_position_callback, TDLAS_ready_callback, TDLAS_data_callback):
+    def register_callbacks(self, ptu_ready_callback, hunter_position_callback, TDLAS_ready_callback, TDLAS_data_callback,
+                           end_simulation_callback):
         """Register callbacks with thread-safe protection."""
         with self._lock:
             self._callback_ptu_ready = ptu_ready_callback
             self._callback_hunter_position = hunter_position_callback
             self._callback_TDLAS_ready = TDLAS_ready_callback
             self._callback_TDLAS_data = TDLAS_data_callback
+            self._callback_end_simulation = end_simulation_callback
             self._callbacks_registered = True
             self.get_logger().info('Callbacks registered successfully')
             
@@ -206,6 +219,23 @@ class MethaneScanNode(Node):
             self.signals.log_message_signal.emit('error', f'Error in TDLAS data callback: {str(e)}')
             traceback.print_exc()
     
+    def _listener_end_simulation_callback_safe(self, msg):
+        """Thread-safe wrapper for end simulation message callback."""
+        if not self._node_running or not self._subscriptions_active:
+            return
+        
+        try:
+            with self._lock:
+                end_simulation = msg.data
+            
+            self.signals.log_message_signal.emit('info', f'Received end simulation message: {end_simulation}')
+            if end_simulation:
+                self.signals.end_simulation_signal.emit(True)
+                # Handle end simulation logic here
+        except Exception as e:
+            self.signals.log_message_signal.emit('error', f'Error in end simulation callback: {str(e)}')
+            traceback.print_exc()
+
     def _handle_ptu_ready_qt(self, ptu_ready):
         """Qt thread handler for PTU ready signal."""
         try:
@@ -261,6 +291,16 @@ class MethaneScanNode(Node):
             self.get_logger().error(f'Error handling TDLAS data in Qt thread: {str(e)}')
             traceback.print_exc
     
+    def _handle_end_simulation_qt(self, end_simulation):
+        """Qt thread handler for end simulation signal."""
+        try:
+            if self._callbacks_registered and self._callback_end_simulation:
+                self._callback_end_simulation()
+            self.get_logger().info(f'End simulation signal received: {end_simulation}')
+        except Exception as e:
+            self.get_logger().error(f'Error handling end simulation in Qt thread: {str(e)}')
+            traceback.print_exc()
+
     def pause_subscriptions(self):
         """Pause processing of incoming messages."""
         with self._lock:
@@ -337,7 +377,8 @@ def main(args=None):
             ptu_ready_callback=controller.update_PTU_ready,
             hunter_position_callback=controller.update_hunter_position,
             TDLAS_ready_callback=controller.update_TDLAS_ready,
-            TDLAS_data_callback=controller.update_TDLAS_data
+            TDLAS_data_callback=controller.update_TDLAS_data,
+            end_simulation_callback=controller.finish_test
         )
         
         # Set up Qt heartbeat timer for clean shutdown and responsive UI
@@ -398,6 +439,7 @@ def main(args=None):
         # Clean up ROS resources
         if node:
             try:
+                controller.shutdown()
                 node.shutdown()
             except Exception as e:
                 print(f"Error during node shutdown: {str(e)}")

@@ -125,7 +125,6 @@ class MainWindow(QMainWindow):
             self.current_theme = "light"
             self.toggle_theme_action.setText("Modo Oscuro")
     
-    # Métodos para registrar callbacks (desde el controlador)
     def register_ptu_config_callback(self, callback):
         self.methane_scan_tab.register_ptu_config_callback(callback)
 
@@ -139,7 +138,6 @@ class MainWindow(QMainWindow):
         self.ptu_config_dialog.rejected.connect(callback)
         self.robot_config_dialog.rejected.connect(callback)
 
-    # Métodos para cambiar la pantalla
     def switch_to_ptu_config(self):
         # Show PTU configuration dialog
         # Ensure the dialog adjusts to content before showing

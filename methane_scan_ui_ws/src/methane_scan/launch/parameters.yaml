@@ -7,3 +7,4 @@ methane_scan_node:
       tdlas_data: /TDLAS_data
       initialize_hunter: /initialize_hunter_params
       start_hunter: /start_simulation
+      end_simulation: /end_simulation

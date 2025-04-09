@@ -190,13 +190,11 @@ class PTUConfigWidget(QWidget):
             self.lat_edit.setReadOnly(False)
             self.lon_edit.setReadOnly(False)
         
-    
     def _apply_changes(self):
         #Por ahora asi, luego hay que añadir el guardado de los parametros
         if self.PTU_coordinates:
             self.position_saved.emit(self.PTU_coordinates)
     
-    # Add sizeHint method to properly suggest sizing to the parent dialog
     def sizeHint(self):
         # Calculate a better size based on content
         return QSize(550, 650)

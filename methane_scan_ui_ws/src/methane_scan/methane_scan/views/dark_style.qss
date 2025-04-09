@@ -137,7 +137,6 @@ QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
     margin-top: -8px;
-    background-color: #1C1C1C;
     padding: 0 5px;
 }
 
@@ -157,9 +156,40 @@ QLineEdit:read-only {
 }
 
 
-/* ----------------- Botones Iniciar y Abortar (OSCURO) ----------------- */
+QDialog {
+    background-color: #1C1C1C;
+    color: #DDDDDD;
+    border: 1px solid #444444;
+    padding: 8px;
+}
 
-/* Botón Iniciar (OSCURO) */
+/* Zona de Control con el mismo estilo card que tus DeviceCards */
+QFrame#controlZone {
+    background-color: #2A2A2A;
+    border-radius: 10px; 
+    border: 1px solid #444444;
+}
+
+/* Ajuste de labels dentro del control zone */
+QFrame#controlZone QLabel {
+    color: #DDDDDD;
+}
+
+/* Si quieres un estilo distinto para la parte interna de datos */
+QFrame#controlDataFrame {
+    background-color: transparent; /* o #2A2A2A si prefieres un color sólido */
+    border: none;
+}
+
+/* Ajustar el separador horizontal en oscuro */
+QFrame[frameShape="4"] {
+    /* QFrame::HLine */
+    background-color: #444444;
+    height: 1px;
+    margin: 4px 0;
+}
+
+/* Botones Iniciar/Abortar (ya definidos en tu código, pero por si acaso) */
 QPushButton#btnIniciar {
     background-color: #28a745;
     color: #ffffff;
@@ -172,7 +202,12 @@ QPushButton#btnIniciar:hover {
     background-color: #218838;
 }
 
-/* Botón Abortar (OSCURO) */
+QPushButton#btnIniciar:disabled {
+    background-color: #185726;
+    color: #888888;
+    border: 1px solid #0a2911;
+}
+
 QPushButton#btnAbortar {
     background-color: #dc3545;
     color: #ffffff;
@@ -185,9 +220,8 @@ QPushButton#btnAbortar:hover {
     background-color: #c82333;
 }
 
-QDialog {
-    background-color: #1C1C1C;
-    color: #DDDDDD;
-    border: 1px solid #444444;
-    padding: 8px;
+QPushButton#btnAbortar:disabled {
+    background-color: #8b232d;
+    color: #888888;
+    border: 1px solid #501218;
 }
