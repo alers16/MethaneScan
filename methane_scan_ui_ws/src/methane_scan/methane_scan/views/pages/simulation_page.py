@@ -1,81 +1,45 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QTableWidget,
-    QTableWidgetItem, QHeaderView, QSizePolicy, QGraphicsScene, QDialogButtonBox, QGroupBox, QLineEdit, QGridLayout
+    QTableWidgetItem, QHeaderView, QSizePolicy, QGraphicsScene, QDialogButtonBox, QGroupBox, QLineEdit, QGridLayout,
+    QSplitter, QHBoxLayout, QVBoxLayout, QTableWidgetItem, QSpacerItem, QSizePolicy,
+    QFileDialog, QFrame, QToolButton, QStyle, QStyleOption
 )
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import Qt, pyqtSignal
 
+import subprocess
+import threading
+
 from methane_scan.views.components.map_view import SatelliteMap # type: ignore
 from methane_scan.views.components.device_card import DeviceCard # type: ignore
 
-class HomePage(QWidget):
-    path_saved = pyqtSignal(list)
-
+class SimulationPage(QWidget):
     def __init__(self, API_KEY):
         super().__init__()
         self.setObjectName("methaneScanTab")
         self._API_KEY = API_KEY
         self._build_ui()
+        self.file_path = None
 
     def _build_ui(self):
         """Construye la interfaz de la primera pestaña (MethaneScan)."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         
-        # 1) Fila superior con cards de estado de dispositivos
-        devices_layout = QHBoxLayout()
-        layout.addLayout(devices_layout)
-        
-        # Crear las tres "cards" de dispositivos
-        self.card_ptu = DeviceCard("PTU", "No se encuentran: ('Posición', 'Confirmación')", ":/icon_PTU.svg")
-        self.card_tdlas = DeviceCard("TDLAS", "No se encuentra Confirmación", ":/icon_TDLAS.svg")
-        self.card_robot = DeviceCard("Robot", "No se encuentran: ('Posición', 'Trayectoria', 'Velocidad')", ":/icon_Robot.svg")
-        
-        # Añadir las cards al layout con 'stretch factor' para que tengan igual ancho
-        devices_layout.addWidget(self.card_ptu, 1)
-        devices_layout.addWidget(self.card_tdlas, 1)
-        devices_layout.addWidget(self.card_robot, 1)
-        
         # 2) Zona central: Mapa (izq) y Zona de Control (dcha)
         center_layout = QHBoxLayout()
-        layout.addLayout(center_layout, stretch=1)
         
-        # 2a) Mapa de inspección
+        # 1a) Mapa de inspección
         map_layout = QVBoxLayout()
-        center_layout.addLayout(map_layout, stretch=3)
-        
-        # Título "Mapa de inspección"
-        map_title_layout = QHBoxLayout()
-        map_layout.addLayout(map_title_layout)
-        
-        map_label = QLabel("Mapa de inspección")
-        map_label.setStyleSheet("font-weight: bold; font-size: 16pt;")
-        map_title_layout.addWidget(map_label)
-        map_title_layout.addStretch()
-        
-        # Botones de zoom, seleccionar área e importar datos
-        self.btn_select_area = QPushButton("Seleccionar Área")
-        self.btn_select_area.clicked.connect(self.selectArea)
-        self.btn_clean_area= QPushButton("Limpiar Área")
-        self.btn_clean_area.setDisabled(True)
-        self.btn_clean_area.clicked.connect(self.cleanSelection)
-        btn_zoom_in = QPushButton("+")
-        btn_zoom_out = QPushButton("-")
-        
-        map_buttons_layout = QHBoxLayout()
-        map_buttons_layout.addWidget(self.btn_select_area)
-        map_buttons_layout.addWidget(self.btn_clean_area)
-        map_buttons_layout.addWidget(btn_zoom_in)
-        map_buttons_layout.addWidget(btn_zoom_out)
-        map_layout.addLayout(map_buttons_layout)
-        
-        # Marco donde irá el mapa
-        scene = QGraphicsScene()
-        scene.setSceneRect(0, 0, 1000, 1000)
+        title_map = QLabel("Mapa de inspección")
+        title_map.setStyleSheet("font-weight: bold; font-size: 16pt;")
+        map_layout.addWidget(title_map)
+
         self.map_frame = SatelliteMap(api_key=self._API_KEY)
         self.map_frame.setObjectName("mapFrame")
         self.map_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         map_layout.addWidget(self.map_frame)
+        center_layout.addLayout(map_layout, stretch=3)
         
         # 2b) Zona de Control
         control_frame = QFrame()
@@ -90,24 +54,21 @@ class HomePage(QWidget):
         control_layout.setSpacing(12)
 
         # --- Encabezado con icono y título ---
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(8)
+        lbl_control = QLabel("Zona de Control")
+        lbl_control.setStyleSheet("font-weight: bold; font-size: 16pt; color: #FFFFFF;")
+        control_layout.addWidget(lbl_control)
+        control_layout.addWidget(self._make_separator())
 
-        header_title = QLabel("Zona de Control")
-        header_title.setStyleSheet("""
-            font-weight: bold; 
-            font-size: 16pt; 
-            color: #FFFFFF;
-        """)
-        header_layout.addWidget(header_title)
-        header_layout.addStretch()
-        control_layout.addLayout(header_layout)
-
-        # Separador horizontal sutil
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFrameShadow(QFrame.Sunken)
-        control_layout.addWidget(separator)
+        # Selector de archivo rosbag
+        file_layout = QHBoxLayout()
+        self.file_input = QLineEdit()
+        self.file_input.setPlaceholderText("Selecciona un archivo .bag...")
+        self.file_input.setReadOnly(True)
+        btn_browse = QPushButton("Examinar...")
+        btn_browse.clicked.connect(self._on_browse)
+        file_layout.addWidget(self.file_input)
+        file_layout.addWidget(btn_browse)
+        control_layout.addLayout(file_layout)
 
         # --- Bloque de datos (Podemos usar un QFrame "interior") ---
         data_frame = QFrame()
@@ -275,7 +236,7 @@ class HomePage(QWidget):
         self.btn_abortar.setObjectName("btnAbortar")
         self.btn_abortar.setDisabled(True)
 
-        self.not_ready_label = QLabel("Nota: Todos los dispositivos deben estar listos para iniciar.")
+        self.not_ready_label = QLabel("Nota: Selecciona un archivo para habilitar iniciar.")
         self.not_ready_label.setStyleSheet("font-size: 10pt; color: red;")
         self.not_ready_label.setAlignment(Qt.AlignCenter)
         self.not_ready_label.setContentsMargins(0, 0, 0, 10)
@@ -284,59 +245,42 @@ class HomePage(QWidget):
         buttons_layout.addWidget(self.btn_iniciar)
         buttons_layout.addWidget(self.btn_abortar)
         control_layout.addLayout(buttons_layout)
-   
-    def register_ptu_config_callback(self, callback):
-        """Permite registrar un callback que se ejecutará al hacer clic en la card PTU."""
-        # Usamos una lambda para ignorar el argumento 'event' y llamar al callback inyectado
-        self.card_ptu.mousePressEvent = lambda event: callback()
+        
+        # 2) Panel superior: mapa + control
+        top_panel = QWidget()
+        top_panel.setLayout(center_layout)
+        top_panel.setMinimumHeight(500)
+
+        # 3) Panel inferior: Datos Obtenidos (etiqueta + tabla)
+        bottom_panel = QWidget()
+        bottom_layout = QVBoxLayout(bottom_panel)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        lbl_data = QLabel("Datos Obtenidos")
+        lbl_data.setStyleSheet("font-weight: bold; font-size: 14pt;")
+        bottom_layout.addWidget(lbl_data)
+        # Tabla
+        self.table = QTableWidget(3, 3)
+        self.table.setHorizontalHeaderLabels(["Medidas del láser", "Medidas del viento", "Timestamp"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self._populate_sample_rows()
+        bottom_layout.addWidget(self.table)
+        bottom_panel.setMinimumHeight(150)
+
+        # --- 4) Splitter vertical: top + bottom ---
+        splitter = QSplitter(Qt.Vertical)
+        splitter.addWidget(top_panel)
+        splitter.addWidget(bottom_panel)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 1)
+        splitter.setCollapsible(0, False)
+        splitter.setCollapsible(1, False)
+
+        # 5) Añadir splitter al layout principal
+        layout.addWidget(splitter)
     
-    def register_robot_config_callback(self, callback):
-        """Permite registrar un callback que se ejecutará al hacer clic en la card Robot."""
-        # Usamos una lambda para ignorar el argumento 'event' y llamar al callback inyectado
-        self.card_robot.mousePressEvent = lambda event: callback()
-
-    def onGetRectCorners(self):
-        # Llamamos a getRectangleCorners y definimos un callback
-        self.map_frame.getCorners(self.handleRectCorners)
-    
-    def selectArea(self):
-        self.map_frame.enableDrawing()
-        self.btn_select_area.setText("Guardar Selección")
-        self.btn_select_area.clicked.connect(self.saveSelection)
-
-    def saveSelection(self):
-        self.btn_select_area.setText("Seleccionar Area")
-        self.map_frame.disableDrawing()
-        self.btn_select_area.clicked.connect(self.selectArea)
-        self.map_frame.getCorners(self.handleCorners)
-        self.btn_clean_area.setDisabled(False)
-
-    def cleanSelection(self):
-        self.map_frame.clearSelection()
-        self.btn_clean_area.setDisabled(True)
-        self.path_saved.emit([])
-
-    def handleCorners(self, corners):
-        """
-        corners es la lista [SW, NW, NE, SE] o None si no hay rectángulo.
-        Cada esquina es un dict con lat, lng.
-        """
-        if corners is not None:
-            self.path_saved.emit(corners)
-    
-    def enableStartButton(self, callback):
+    def enableStartButton(self):
         self.btn_iniciar.setDisabled(False)
-        self.btn_iniciar.clicked.connect(callback)
-    
-    def set_device_status(self, device, status, errors = []):
-        if device == "PTU":
-            self.card_ptu.set_status(status, errors)
-        elif device == "Robot":
-            self.card_robot.set_status(status, errors)
-        elif device == "TDLAS":
-            self.card_tdlas.set_status(status, errors)
-        else:
-            raise ValueError("Dispositivo no reconocido")
+        self.btn_iniciar.clicked.connect(self.start_simulation)
     
     def set_tdlas_data(self, data):
         self.methane_label.setText(f"Medición de Metano: {data['average_ppmxm']}")
@@ -355,3 +299,46 @@ class HomePage(QWidget):
             self.not_ready_label.setVisible(False)
         else:
             self.not_ready_label.setVisible(True)
+
+    def _populate_sample_rows(self):
+        # Ejemplo de filas iniciales
+        sample = [
+            ("6.2 ppm", "2.3 m/s", "12:00:00"),
+            ("6.5 ppm", "2.1 m/s", "12:05:00"),
+            ("6.0 ppm", "2.4 m/s", "12:10:00"),
+        ]
+        for row, (laser, wind, ts) in enumerate(sample):
+            self.table.setItem(row, 0, QTableWidgetItem(laser))
+            self.table.setItem(row, 1, QTableWidgetItem(wind))
+            self.table.setItem(row, 2, QTableWidgetItem(ts))
+
+    def _make_separator(self):
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setFrameShadow(QFrame.Sunken)
+        return sep
+
+    def _on_browse(self):
+        folder = QFileDialog.getExistingDirectory(self, "Selecciona la carpeta")
+        if folder:
+            self.file_input.setText(folder)
+            self.file_path = folder
+            self.not_ready_label.hide()
+            self.enableStartButton()
+    
+    def start_simulation(self):
+        command = ["ros2", "bag", "play", self.file_path]
+        self.process = subprocess.Popen(command)
+
+        def _wait_and_kill():
+            # Espera a que termine de reproducir todos los mensajes
+            self.process.wait()
+            # Por si todavía siguiera vivo, lo mata
+            try:
+                self.process.kill()
+            except Exception:
+                pass
+        # Lanzar la monitorización en un hilo para no bloquear la UI
+        threading.Thread(target=_wait_and_kill, daemon=True).start()
+            
+

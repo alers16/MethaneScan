@@ -24,10 +24,15 @@ class TitleBar(QWidget):
 
         self.navMethane = QPushButton("Inicio", self)
         self.navMethane.setStyleSheet("background: transparent; color: #ECECEC; border: none; font-size: 10pt;")
+        self.navMethane.clicked.connect(self.parent.switch_to_home_tab)
         self.navDatos = QPushButton("Datos", self)
         self.navDatos.setStyleSheet("background: transparent; color: #ECECEC; border: none; font-size: 10pt;")
+        self.navSiulation = QPushButton("Simulación", self)
+        self.navSiulation.setStyleSheet("background: transparent; color: #ECECEC; border: none; font-size: 10pt;")
+        self.navSiulation.clicked.connect(self.parent.switch_to_simulation_tab)
         layout.addWidget(self.navMethane)
         layout.addWidget(self.navDatos)
+        layout.addWidget(self.navSiulation)
         layout.addStretch()
 
         # Derecha: Botones de control de ventana

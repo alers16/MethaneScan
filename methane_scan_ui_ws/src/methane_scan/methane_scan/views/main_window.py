@@ -12,8 +12,10 @@ import platform
 from methane_scan.views.components.map_view import SatelliteMap, MyWebEnginePage # type: ignore
 import os
 from dotenv import load_dotenv
+from PyQt5.QtWidgets import QStackedWidget
 from methane_scan.views.components.title_bar import TitleBar # type: ignore
 from methane_scan.views.pages.home_page import HomePage # type: ignore
+from methane_scan.views.pages.simulation_page import SimulationPage # type: ignore
 from methane_scan.views.pages.robot_config import RobotConfigWidget # type: ignore
 import methane_scan.qresources_rc  # type: ignore # Tu archivo de recursos compilado
 
@@ -69,9 +71,17 @@ class MainWindow(QMainWindow):
         self.titleBar.setStyleSheet("background-color: #1C1C1C;")
         main_layout.addWidget(self.titleBar)
 
-        # Construimos la pantalla principal (pestaña MethaneScan)
-        self.methane_scan_tab = HomePage(API_KEY)
-        main_layout.addWidget(self.methane_scan_tab)
+        # Construimos un QTabWidget para manejar el cambio de pantalla según lo indique la title bar
+        self.tab_widget = QStackedWidget()
+        # Agregamos la pantalla principal (HomePage) como la primera pestaña
+        self.home_tab = HomePage(API_KEY)
+        self.tab_widget.addWidget(self.home_tab)
+        # Agregamos la pestaña de simulación (SimulationPage) como la segunda pestaña
+        self.simulation_tab = SimulationPage(API_KEY)
+        self.tab_widget.addWidget(self.simulation_tab)
+        self.tab_widget.setCurrentWidget(self.home_tab)
+        # Se pueden agregar más pestañas y cambiar entre ellas mediante callbacks de la title bar
+        main_layout.addWidget(self.tab_widget)
         
         # Creamos los diálogos de configuración como QDialog
         self.ptu_config_dialog = QDialog(self)
@@ -109,8 +119,8 @@ class MainWindow(QMainWindow):
         new_width = int(screen_rect.width() * 0.5)
         new_height = int(screen_rect.height() * 0.5)
         # Set the size of the map in the main tab
-        self.methane_scan_tab.map_frame.setMinimumSize(new_width, new_height)
-        
+        self.home_tab.map_frame.setMinimumSize(new_width, new_height)
+        self.simulation_tab.map_frame.setMinimumSize(new_width, new_height)
         # Let dialogs size themselves based on their content
         # No fixed sizing for dialogs to allow them to adapt to their content
     
@@ -126,10 +136,10 @@ class MainWindow(QMainWindow):
             self.toggle_theme_action.setText("Modo Oscuro")
     
     def register_ptu_config_callback(self, callback):
-        self.methane_scan_tab.register_ptu_config_callback(callback)
+        self.home_tab.register_ptu_config_callback(callback)
 
     def register_robot_config_callback(self, callback):
-        self.methane_scan_tab.register_robot_config_callback(callback)
+        self.home_tab.register_robot_config_callback(callback)
 
     def register_home_callback(self, callback):
         self.titleBar.register_home_callback(callback)
@@ -156,6 +166,13 @@ class MainWindow(QMainWindow):
             self.ptu_config_dialog.reject()
         if self.robot_config_dialog.isVisible():
             self.robot_config_dialog.reject()
+    
+    # Switch to home tab
+    def switch_to_home_tab(self):
+        self.tab_widget.setCurrentWidget(self.home_tab)
+
+    def switch_to_simulation_tab(self):
+        self.tab_widget.setCurrentWidget(self.simulation_tab)
 
 def main():
     app = QApplication(sys.argv)

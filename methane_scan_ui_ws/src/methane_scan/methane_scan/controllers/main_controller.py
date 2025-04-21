@@ -144,8 +144,8 @@ class MainController():
             else:
                 self.node.get_logger().warn("PTU config widget not available for event connection")
                 
-            if hasattr(self.view, 'methane_scan_tab') and self.view.methane_scan_tab is not None:
-                self.view.methane_scan_tab.path_saved.connect(self._update_path)
+            if hasattr(self.view, 'home_tab') and self.view.home_tab is not None:
+                self.view.home_tab.path_saved.connect(self._update_path)
             else:
                 self.node.get_logger().warn("Methane scan tab not available for event connection")
                 
@@ -388,11 +388,11 @@ class MainController():
             
             # Check if view and components are available
             if (self.view is not None and 
-                hasattr(self.view, 'methane_scan_tab') and 
-                self.view.methane_scan_tab is not None and
-                hasattr(self.view.methane_scan_tab, 'map_frame')):
+                hasattr(self.view, 'home_tab') and 
+                self.view.home_tab is not None and
+                hasattr(self.view.home_tab, 'map_frame')):
                 
-                self.view.methane_scan_tab.map_frame.drawPTUMarker(position[0], position[1])
+                self.view.home_tab.map_frame.drawPTUMarker(position[0], position[1])
             else:
                 self.node.get_logger().warn("Could not update map: UI components not available")
 
@@ -511,11 +511,11 @@ class MainController():
             
             # Check if view and components are available before updating UI
             if (self.view is not None and 
-                hasattr(self.view, 'methane_scan_tab') and 
-                self.view.methane_scan_tab is not None and
-                hasattr(self.view.methane_scan_tab, 'map_frame')):
+                hasattr(self.view, 'home_tab') and 
+                self.view.home_tab is not None and
+                hasattr(self.view.home_tab, 'map_frame')):
                 
-                self.view.methane_scan_tab.set_robot_position(position)
+                self.view.home_tab.set_robot_position(position)
 
                 self.view.robot_config_widget.set_position(position)
             else:
@@ -588,29 +588,24 @@ class MainController():
             # Store TDLAS data
             self.tdlas_data_list.append(data)
 
-            #self.view.methane_scan_tab.set_tdlas_data(data)
-#
-            ## Extraer el timestamp usando get() correctamente
-            #header = data.get('header')
-            #stamp = header.get('stamp')
-            #timestamp = int(stamp.get('sec')) * 1000000000 + int(stamp.get('nanosec'))
-#
-            ## Serializar el dato a JSON
-            #data_str = json.dumps(data)
-#
-            ## Escribir el mensaje en el bag; la firma esperada es (topic: str, data: str, timestamp: int)
-            #self.writer.write("/tdlas_data", data_str, timestamp)
-            #self.node.get_logger().info(f"TDLAS data saved to bag: {data}")
+            # Send data to save it
+            msg = ROSString()
+            msg.data = json.dumps({
+                "tdlas_data": data,
+                "ptu_position": self.PTU_position,
+                "hunter_position": self.robot_position
+            })
+            self.node.publisher_play_simulation.publish(msg)
                 
             # Update TDLAS data in UI if available
             if (self.view is not None and 
-                hasattr(self.view, 'methane_scan_tab') and 
-                self.view.methane_scan_tab is not None):
+                hasattr(self.view, 'home_tab') and 
+                self.view.home_tab is not None):
 
                 positions = [(self.PTU_position[0], self.PTU_position[1]), (self.robot_position['lat'], self.robot_position['lng'])]
                 opacity = 0.9 * (data.get('average_ppmxm', 0) / 150.0) + 0.1
                 
-                self.view.methane_scan_tab.map_frame.drawBeam(positions, opacity)
+                self.view.home_tab.map_frame.drawBeam(positions, opacity)
             else:
                 self.node.get_logger().warn("Could not update TDLAS data: UI components not available")
         except Exception as e:
@@ -624,7 +619,7 @@ class MainController():
         Este método realiza las siguientes acciones:
             - Registra el estado actual de TDLAS usando el logger asociado al nodo.
             - Comprueba si la vista ('view') está inicializada; en caso contrario, registra un error.
-            - Verifica que exista y esté asignada la pestaña 'methane_scan_tab' en la vista.
+            - Verifica que exista y esté asignada la pestaña 'home_tab' en la vista.
             - Si TDLAS está listo y la pestaña existe, actualiza el estado del dispositivo TDLAS en la interfaz
               y llama a check_all_ready() para verificar el estado general.
 
@@ -638,13 +633,13 @@ class MainController():
             if self.view is None:
                 self.node.get_logger().error("Cannot check TDLAS ready: view is not initialized")
                 return
-            has_methane_scan_tab = (hasattr(self.view, 'methane_scan_tab') and
-                                    self.view.methane_scan_tab is not None)
+            has_home_tab = (hasattr(self.view, 'home_tab') and
+                                    self.view.home_tab is not None)
             
             # Update TDLAS status based on current state
             if self.TDLAS_ready:
-                if has_methane_scan_tab:
-                    self.view.methane_scan_tab.set_device_status("TDLAS", True)
+                if has_home_tab:
+                    self.view.home_tab.set_device_status("TDLAS", True)
                     self.check_all_ready()
         except Exception as e:
             self.node.get_logger().error(f"Error checking TDLAS ready: {str(e)}")
@@ -661,7 +656,7 @@ class MainController():
             2. Verifica que la vista (UI) esté inicializada. Si no lo está, registra un error y
                termina el proceso.
             3. Comprueba si existen los componentes:
-                 - La pestaña 'methane_scan_tab' destinada a mostrar el inicio.
+                 - La pestaña 'home_tab' destinada a mostrar el inicio.
                  - El widget 'ptu_config_widget' encargado de representar la configuración
                    de la PTU.
             4. Actualiza el estado del PTU en función de la disponibilidad de su posición
@@ -691,8 +686,8 @@ class MainController():
                 self.node.get_logger().error("Cannot check PTU ready: view is not initialized")
                 return
                 
-            has_methane_scan_tab = (hasattr(self.view, 'methane_scan_tab') and 
-                                   self.view.methane_scan_tab is not None)
+            has_home_tab = (hasattr(self.view, 'home_tab') and 
+                                   self.view.home_tab is not None)
             has_ptu_config_widget = (hasattr(self.view, 'ptu_config_widget') and 
                                     self.view.ptu_config_widget is not None)
             
@@ -701,16 +696,16 @@ class MainController():
                 self.node.get_logger().info(f"Posición de PTU actualizada: {self.PTU_position}")
                 self.ptu_configured = True
                 
-                if has_methane_scan_tab:
-                    self.view.methane_scan_tab.set_device_status("PTU", True)
+                if has_home_tab:
+                    self.view.home_tab.set_device_status("PTU", True)
                     self.check_all_ready()
                 if has_ptu_config_widget:
                     self.view.ptu_config_widget.set_state("Operativo")
             elif (self.PTU_position is not None):
                 self.ptu_configured = False
                 
-                if has_methane_scan_tab:
-                    self.view.methane_scan_tab.set_device_status("PTU", False, ["Confirmación"])
+                if has_home_tab:
+                    self.view.home_tab.set_device_status("PTU", False, ["Confirmación"])
                 if has_ptu_config_widget:
                     self.view.ptu_config_widget.set_state("No se ha confirmado la posición")
                 
@@ -718,8 +713,8 @@ class MainController():
                 self.node.get_logger().info("PTU no configurado")
                 self.ptu_configured = False
                 
-                if has_methane_scan_tab:
-                    self.view.methane_scan_tab.set_device_status("PTU", False, ["Posición"])
+                if has_home_tab:
+                    self.view.home_tab.set_device_status("PTU", False, ["Posición"])
                 if has_ptu_config_widget:
                     self.view.ptu_config_widget.set_state("No se ha configurado la posición")
         except Exception as e:
@@ -735,14 +730,14 @@ class MainController():
         Detalles:
             - Registra información básica sobre velocidad, posición y trayectoria.
             - Comprueba que la vista (view) esté inicializada; en caso contrario, registra un error.
-            - Verifica la existencia y disponibilidad de 'methane_scan_tab' en la vista.
+            - Verifica la existencia y disponibilidad de 'home_tab' en la vista.
             - Evalúa si 'robot_speed' es válida (mayor a 0).
             - Evalúa que 'robot_position' no sea nula.
             - Evalúa que 'path' contenga datos válidos (lista no vacía).
             - Actualiza el estado de configuración del robot ('robot_configured') basado en la presencia
               de todos los parámetros requeridos.
             - Dependiendo de los parámetros verificados, actualiza el estado del dispositivo en el widget
-              'methane_scan_tab', indicando si el robot está listo o qué parámetros faltan.
+              'home_tab', indicando si el robot está listo o qué parámetros faltan.
             - Si está disponible, actualiza el widget 'robot_config_widget' mostrando el estado operativo
               o los elementos faltantes necesarios.
             - En caso de cualquier excepción, captura el error e imprime el traceback correspondiente en el log.
@@ -755,11 +750,11 @@ class MainController():
                 self.node.get_logger().error("Cannot check Robot ready: view is not initialized")
                 return
                 
-            # Check if methane_scan_tab is available
-            has_methane_scan_tab = (hasattr(self.view, 'methane_scan_tab') and 
-                                   self.view.methane_scan_tab is not None)
-            if not has_methane_scan_tab:
-                self.node.get_logger().error("Cannot check Robot ready: methane_scan_tab is not available")
+            # Check if home_tab is available
+            has_home_tab = (hasattr(self.view, 'home_tab') and 
+                                   self.view.home_tab is not None)
+            if not has_home_tab:
+                self.node.get_logger().error("Cannot check Robot ready: home_tab is not available")
                 return
                 
             missing = []
@@ -778,11 +773,11 @@ class MainController():
             
             # Update UI status
             if not missing:
-                self.view.methane_scan_tab.set_device_status("Robot", True)
+                self.view.home_tab.set_device_status("Robot", True)
                 self.check_publish()
                 self.check_all_ready()
             else:
-                self.view.methane_scan_tab.set_device_status("Robot", False, missing)
+                self.view.home_tab.set_device_status("Robot", False, missing)
                 
             # Update robot config widget if available
             if (hasattr(self.view, 'robot_config_widget') and 
@@ -809,7 +804,7 @@ class MainController():
         Si se cumplen todas estas condiciones, se registra en el logger que todo está listo y, 
         adicionalmente, se procede a actualizar la interfaz de usuario verificando que:
             - La vista (view) esté inicializada.
-            - La pestaña 'methane_scan_tab' exista y no sea nula.
+            - La pestaña 'home_tab' exista y no sea nula.
 
         De cumplirse, se indica en la pestaña que el sistema está listo y se habilita el botón de inicio.
         En caso de cualquier excepción durante el proceso, se registra el error y se imprime el traceback.
@@ -823,14 +818,14 @@ class MainController():
                     self.node.get_logger().error("Cannot check Robot ready: view is not initialized")
                     return
                     
-                # Check if methane_scan_tab is available
-                has_methane_scan_tab = (hasattr(self.view, 'methane_scan_tab') and 
-                                    self.view.methane_scan_tab is not None)
+                # Check if home_tab is available
+                has_home_tab = (hasattr(self.view, 'home_tab') and 
+                                    self.view.home_tab is not None)
                 
                 # Update UI status
-                if has_methane_scan_tab:
-                    self.view.methane_scan_tab.set_ready(True)
-                    self.view.methane_scan_tab.enableStartButton(self.test_start)
+                if has_home_tab:
+                    self.view.home_tab.set_ready(True)
+                    self.view.home_tab.enableStartButton(self.test_start)
         except Exception as e:
             self.node.get_logger().error(f"Error checking all ready: {str(e)}")
             traceback.print_exc()
@@ -874,7 +869,8 @@ class MainController():
     def test_start(self):
         """Test start button callback"""
         self.node.get_logger().info("Botón de inicio presionado")
-        self.process, _ = self._record_ros2_bag()
+        self.process, _ = self._record_ros2_bag(self.node.get_parameter("TOPICS.play_simulation").
+                                                value)
         msg = ROSString()
         msg.data = json.dumps({"path": self.path, "speed": self.robot_speed})
         self.node.publisher_start_simulation.publish(msg)
@@ -898,13 +894,39 @@ class MainController():
         try:
             if self.process:
                 self.process.terminate()
-                self.process.wait()
+                try:
+                    self.process.communicate(timeout=3)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
                 self.node.get_logger().info("Test finished successfully")
             else:
                 self.node.get_logger().warn("No process to terminate")
         except Exception as e:
             self.node.get_logger().error(f"Error finishing test: {str(e)}")
             traceback.print_exc()
+    
+    def play_simulation(self, data : dict):
+        try:
+            if data is None:
+                self.node.get_logger().warn("Received null TDLAS data")
+                return
+            # Update TDLAS data in UI if available
+            if (self.view is not None and 
+                hasattr(self.view, 'simulation_tab') and 
+                self.view.simulation_tab is not None):
+
+                positions = [(data.get('ptu_position')[0], data.get('ptu_position')[1]),
+                              (data.get('hunter_position')['lat'], data.get('hunter_position')['lng'])]
+                opacity = 0.9 * (data.get('tdlas_data').get('average_ppmxm', 0) / 150.0) + 0.1
+                
+                self.view.simulation_tab.map_frame.drawBeam(positions, opacity)
+                self.view.simulation_tab.map_frame.drawRobotMarker(data.get('hunter_position')['lat'], data.get('hunter_position')['lng'])
+                self.view.simulation_tab.map_frame.drawPTUMarker(data.get('ptu_position')[0], data.get('ptu_position')[1])
+            else:
+                self.node.get_logger().warn("Could not update TDLAS data: UI components not available")
+        except Exception as e:
+            self.node.get_logger().error(f"Error updating TDLAS data: {str(e)}")
+            traceback.print_exc
     
     def shutdown(self):
         """
