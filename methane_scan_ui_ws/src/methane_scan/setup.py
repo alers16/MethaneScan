@@ -20,7 +20,8 @@ setup(
             'qresources_rc.py',
             '.env',
             'views/*.qss',
-            'views/pages/*.qss'
+            'views/pages/*.qss',
+            'views/web/*'
         ]
     },
     zip_safe=True,

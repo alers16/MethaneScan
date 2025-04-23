@@ -9,17 +9,21 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 import subprocess
 import threading
+import pexpect
 
 from methane_scan.views.components.map_view import SatelliteMap # type: ignore
 from methane_scan.views.components.device_card import DeviceCard # type: ignore
 
 class SimulationPage(QWidget):
+    error_signal = pyqtSignal(str)
     def __init__(self, API_KEY):
         super().__init__()
         self.setObjectName("methaneScanTab")
         self._API_KEY = API_KEY
         self._build_ui()
         self.file_path = None
+        self._is_running = False
+        self.child = None
 
     def _build_ui(self):
         """Construye la interfaz de la primera pestaña (MethaneScan)."""
@@ -228,13 +232,21 @@ class SimulationPage(QWidget):
         # -- Botones Iniciar y Abortar --
         buttons_layout = QHBoxLayout()
         
+        # -- Boton de inicio de simulasion --
         self.btn_iniciar = QPushButton("Iniciar")
         self.btn_iniciar.setObjectName("btnIniciar") 
         self.btn_iniciar.setDisabled(True)
+        self.btn_iniciar.clicked.connect(self.start_simulation)
+
+        self.btn_pausar = QPushButton("Pausar")
+        self.btn_pausar.setObjectName("btnPausar")
+        self.btn_pausar.setDisabled(True)
+        self.btn_pausar.clicked.connect(self._pause_simulation)
 
         self.btn_abortar = QPushButton("Abortar")
         self.btn_abortar.setObjectName("btnAbortar")
         self.btn_abortar.setDisabled(True)
+        self.btn_abortar.clicked.connect(self.abort_simulation)
 
         self.not_ready_label = QLabel("Nota: Selecciona un archivo para habilitar iniciar.")
         self.not_ready_label.setStyleSheet("font-size: 10pt; color: red;")
@@ -243,6 +255,7 @@ class SimulationPage(QWidget):
         control_layout.addWidget(self.not_ready_label)
         
         buttons_layout.addWidget(self.btn_iniciar)
+        buttons_layout.addWidget(self.btn_pausar)
         buttons_layout.addWidget(self.btn_abortar)
         control_layout.addLayout(buttons_layout)
         
@@ -277,10 +290,6 @@ class SimulationPage(QWidget):
 
         # 5) Añadir splitter al layout principal
         layout.addWidget(splitter)
-    
-    def enableStartButton(self):
-        self.btn_iniciar.setDisabled(False)
-        self.btn_iniciar.clicked.connect(self.start_simulation)
     
     def set_tdlas_data(self, data):
         self.methane_label.setText(f"Medición de Metano: {data['average_ppmxm']}")
@@ -324,21 +333,54 @@ class SimulationPage(QWidget):
             self.file_input.setText(folder)
             self.file_path = folder
             self.not_ready_label.hide()
-            self.enableStartButton()
+            self.btn_iniciar.setDisabled(False)
+    
+    def _pause_simulation(self):
+        if self.child and self.child.isalive():
+            self.child.send(' ')
+            txt = "Reanudar" if self._is_running else "Pausar"
+            self.btn_pausar.setText(txt)
+            self._is_running = not self._is_running
     
     def start_simulation(self):
-        command = ["ros2", "bag", "play", self.file_path]
-        self.process = subprocess.Popen(command)
+        self._start_process()
 
-        def _wait_and_kill():
-            # Espera a que termine de reproducir todos los mensajes
-            self.process.wait()
-            # Por si todavía siguiera vivo, lo mata
+        self.map_frame.clearBeams()
+        self.map_frame.deleteHunterMarker()
+        self.map_frame.deletePTUMarker()
+        # Deshabilitar el botón de iniciar y habilitar el de abortar
+        self.btn_iniciar.setDisabled(True)
+        self.btn_pausar.setDisabled(False)
+        self.btn_abortar.setDisabled(False)
+        self.btn_pausar.setText("Pausar")
+        self._is_running = True
+
+        # hilo para limpiar cuando acabe
+        def _wait_and_finish():
+            self.child.wait()    # bloquea hasta que el proceso muera
+            self._on_simulation_end()
+
+        threading.Thread(target=_wait_and_finish, daemon=True).start()
+
+    def _on_simulation_end(self):
+        # Vuelve todo a como estaba
+        self.btn_iniciar.setDisabled(False)
+        self.btn_pausar.setDisabled(True)
+        self.btn_abortar.setDisabled(True)
+        self._is_running = False
+        self.child       = None
+
+    def _start_process(self):
+        cmd = f"ros2 bag play {self.file_path} --remap /save_simulation:=/data_playback"
+        self.child = pexpect.spawn(cmd, encoding='utf-8', echo=True)
+
+    def abort_simulation(self):
+        if self.child and self.child.isalive():
+            self.child.terminate(force=False)
             try:
-                self.process.kill()
-            except Exception:
-                pass
-        # Lanzar la monitorización en un hilo para no bloquear la UI
-        threading.Thread(target=_wait_and_kill, daemon=True).start()
+                self.child.wait(2)
+            except pexpect.exceptions.TIMEOUT:
+                self.child.terminate(force=True)
+        self._on_simulation_end()
             
 

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Mapa Satelital con Rectángulo</title>
+    <style>
+      html, body, #map {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+    <!-- Google Maps + librería drawing; callback llama a initMap en map.js -->
+    <script async
+      src="https://maps.googleapis.com/maps/api/js?key=__API_KEY__&libraries=drawing&callback=initMap">
+    </script>
+    <script>
+      window.CONFIG = {
+        lat: __LAT__,
+        lng: __LNG__,
+        zoom: __ZOOM__
+      };
+    </script>
+    <script src="map.js"></script>
+  </head>
+  <body>
+    <div id="map"></div>
+  </body>
+</html>

@@ -121,7 +121,7 @@ class MethaneScanNode(Node):
                                                                     10)
             
             self.publisher_play_simulation = self.create_publisher(String,
-                                                                    self.get_parameter('TOPICS.play_simulation').value,
+                                                                    self.get_parameter('TOPICS.save_simulation').value,
                                                                     10)
 
             self._initialized = True
@@ -140,6 +140,7 @@ class MethaneScanNode(Node):
         self.declare_parameter('TOPICS.start_hunter', "/start_simulation")
         self.declare_parameter('TOPICS.end_simulation', "/end_simulation")
         self.declare_parameter('TOPICS.play_simulation', "/data_playback")
+        self.declare_parameter('TOPICS.save_simulation', "/save_simulation")
     
     def register_callbacks(self, ptu_ready_callback, hunter_position_callback, TDLAS_ready_callback, TDLAS_data_callback,
                            end_simulation_callback, play_simulation_callback):
@@ -263,7 +264,7 @@ class MethaneScanNode(Node):
             with self._lock:
                 self._last_play_simulation = data
             
-            self.signals.log_message_signal.emit('info', f'Received play simulation message: {data}')
+            #self.signals.log_message_signal.emit('info', f'Received play simulation message: {data}')
             self.signals.play_simulation_signal.emit(data)
         except json.JSONDecodeError:
             self.signals.log_message_signal.emit('error', f'Invalid JSON in play simulation message: {msg.data}')
@@ -341,7 +342,7 @@ class MethaneScanNode(Node):
         try:
             if self._callbacks_registered and self._callback_play_simulation:
                 self._callback_play_simulation(data)
-            self.get_logger().info(f'Play simulation signal received: {data}')
+            #self.get_logger().info(f'Play simulation signal received: {data}')
         except Exception as e:
             self.get_logger().error(f'Error handling play simulation in Qt thread: {str(e)}')
             traceback.print_exc()

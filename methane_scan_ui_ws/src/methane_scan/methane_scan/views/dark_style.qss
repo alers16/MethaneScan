@@ -225,3 +225,21 @@ QPushButton#btnAbortar:disabled {
     color: #888888;
     border: 1px solid #501218;
 }
+
+QPushButton#btnPausar {
+    background-color: #005F9F;
+    color: #FFFFFF;
+    border: 1px solid #004D80;
+    border-radius: 5px;
+    padding: 6px 10px;
+}
+
+QPushButton#btnPausar:hover {
+    background-color: #004D80;
+}
+
+QPushButton#btnPausar:disabled {
+    background-color: #003355;
+    color: #888888;
+    border: 1px solid #002244;
+}

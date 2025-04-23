@@ -28,247 +28,26 @@ class SatelliteMap(QWebEngineView):
         self.PTU_coordinates = None
         self.robot_coordinates = None
         
-        # HTML con librería 'drawing' + ocultar POIs/transit
-        html = f"""
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8" />
-            <title>Mapa Satelital con Rectángulo</title>
-            <style>
-              html, body, #map {{
-                margin: 0;
-                padding: 0;
-                width: 100%;
-                height: 100%;
-              }}
-            </style>
-            <!-- Google Maps + librería drawing -->
-            <script async src="https://maps.googleapis.com/maps/api/js?key={api_key}&libraries=drawing"></script>
-            <script>
-              let map;
-              let drawingManager;
-              let lastUserOverlay = null;
-              let ptuMarker = null;
-              let hunterMarker = null;
+        # 1) Ruta absoluta de este archivo (map_view.py)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
 
-              let isDrawingEnabled = false;
-              
-              function initMap() {{
-                const myStyles = [
-                  {{
-                    featureType: "poi",
-                    stylers: [{{ visibility: "off" }}]
-                  }},
-                  {{
-                    featureType: "transit",
-                    stylers: [{{ visibility: "off" }}]
-                  }},
-                  
-                ];
+        # 2) Sube dos niveles: de components → views → methane_scan
+        project_pkg_dir = os.path.abspath(os.path.join(current_dir, '..'))
 
-                map = new google.maps.Map(document.getElementById('map'), {{
-                  center: {{ lat: {lat}, lng: {lng} }},
-                  zoom: {zoom},
-                  mapTypeId: google.maps.MapTypeId.SATELLITE,
-                  styles: myStyles,
-                  disableDefaultUI: false, 
-                  mapTypeControl: false,
-                  rotateControl: false,
-                  streetViewControl: false,
-                  fullscreenControl: false
-                }});
+        # 3) Apunta al folder web dentro de methane_scan
+        base_dir = os.path.join(project_pkg_dir, 'web')
+        html_path = os.path.join(base_dir, 'index.html')
 
-                map.setTilt(0);
-                map.setHeading(0);
+        with open(html_path, 'r', encoding='utf-8') as f:
+            html = (f.read()
+                    .replace('__API_KEY__', api_key)
+                    .replace('__LAT__', str(lat))
+                    .replace('__LNG__', str(lng))
+                    .replace('__ZOOM__', str(zoom))
+                   )
 
-                drawingManager = new google.maps.drawing.DrawingManager({{
-                  drawingControl: false,
-                  drawingControlOptions: {{
-                    position: google.maps.ControlPosition.TOP_CENTER,
-                    drawingModes: [
-                      google.maps.drawing.OverlayType.POLYLINE,
-                      google.maps.drawing.OverlayType.RECTANGLE,
-                      google.maps.drawing.OverlayType.POLYGON
-                    ]
-                  }},
-                  markerOptions: {{
-                    icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
-                  }},
-                  circleOptions: {{
-                    fillColor: "#ffff00",
-                    fillOpacity: 0.5,
-                    strokeWeight: 1,
-                    clickable: true,
-                    editable: true
-                  }}
-                }});
-                drawingManager.setMap(map);
-
-                // overlaycomplete: cuando se termina de dibujar algo
-                google.maps.event.addListener(drawingManager, 'overlaycomplete', function(event) {{
-                  
-                  // Eliminar la figura anterior si existe
-                  if (lastUserOverlay) {{
-                    lastUserOverlay.setMap(null);
-                    lastUserOverlay = null;
-                  }}
-                  // Guardar la nueva figura
-                  lastUserOverlay = event.overlay;
-                  lastUserOverlay.type = event.type;
-                  console.log(lastUserOverlay.type);
-                  
-                }});
-              }}
-
-              // Eliminar la figura dibujada por el usuario
-              function clearUserOverlay() {{
-                if (lastUserOverlay) {{
-                  lastUserOverlay.setMap(null);
-                  lastUserOverlay = null;
-                }}
-              }}
-
-              // Función para habilitar la DrawingManager
-              function enableDrawing() {{
-                if (!isDrawingEnabled) {{
-                  drawingManager.setMap(map);
-                  drawingManager.setOptions({{ drawingControl: true }});
-                  isDrawingEnabled = true;
-                }}
-              }}
-
-
-              // Función para deshabilitar la DrawingManager
-              function disableDrawing() {{
-                if (isDrawingEnabled) {{
-                  drawingManager.setMap(null);
-                  drawingManager.setOptions({{ drawingControl: false }});
-                  isDrawingEnabled = false;
-                }}
-              }}
-
-              // Retorna las 4 esquinas del último rectángulo
-              function getRectCorners() {{
-                const bounds = lastUserOverlay.getBounds();
-                const sw = bounds.getSouthWest();
-                const ne = bounds.getNorthEast();
-                const nw = {{ latitude: ne.lat(), longitude: sw.lng() }};
-                const se = {{ latitude: sw.lat(), longitude: ne.lng() }};
-                return [
-                  {{ latitude: sw.lat(), longitude: sw.lng() }},
-                  nw,
-                  {{ latitude: ne.lat(), longitude: ne.lng() }},
-                  se
-                ];
-              }}
-
-              // Retorna las 4 esquinas del último círculo
-              function getCircleCorners() {{
-                const center = lastUserOverlay.getCenter();
-                const radius = lastUserOverlay.getRadius();
-                return {{ center: {{ latitude: center.lat(), longitude: center.lng() }}, radius: radius }};
-              }}
-
-              // Retorna las esquinas de un polígono
-              function getPolygonCorners() {{
-                let path = lastUserOverlay.getPath();
-                let coords = [];
-                for (let i = 0; i < path.getLength(); i++) {{
-                  let latlng = path.getAt(i);
-                  coords.push({{ latitude: latlng.lat(), longitude: latlng.lng() }});
-                }}
-                return coords;  
-              }}
-
-              // Retorna las esquinas de una polilínea
-              function getPolylineCorners() {{
-                let path = lastUserOverlay.getPath();
-                let coords = [];
-                for (let i = 0; i < path.getLength(); i++) {{
-                  let latlng = path.getAt(i);
-                  coords.push({{ latitude: latlng.lat(), longitude: latlng.lng() }});
-                }}
-                return coords;
-              }}
-
-              function getCorners() {{
-                if(!lastUserOverlay) {{
-                  return null;
-                }}
-                if(lastUserOverlay.type === google.maps.drawing.OverlayType.RECTANGLE) {{
-                  return getRectCorners();
-                }} else if(lastUserOverlay.type === google.maps.drawing.OverlayType.CIRCLE) {{
-                  return getCircleCorners();
-                }} else if(lastUserOverlay.type === google.maps.drawing.OverlayType.POLYGON) {{
-                  return getPolygonCorners();
-                }} else if(lastUserOverlay.type === google.maps.drawing.OverlayType.POLYLINE) {{
-                  return getPolylineCorners();
-                }}
-
-                return null;
-              }}
-
-              // Dibuja una polilínea "haz" en color rojo
-              function drawBeam(coordList, opacity) {{
-                let path = coordList.map(function(c) {{
-                  return {{ lat: c[0], lng: c[1] }};
-                }});
-                let beam = new google.maps.Polyline({{
-                  path: path,
-                  strokeColor: "red",
-                  strokeOpacity: opacity || 1.0,
-                  strokeWeight: 1
-                }});
-                beam.setMap(map);
-              }}
-
-              function deletePTUMarker() {{
-                if (ptuMarker) {{
-                  ptuMarker.setMap(null);
-                  ptuMarker = null;
-                }}
-              }}
-
-              function deleteHunterMarker() {{
-                if (hunterMarker) {{
-                  hunterMarker.setMap(null);
-                  hunterMarker = null;
-                }}
-              }}
-
-
-              function drawPTUMarker(lat, lng) {{
-                var marker = new google.maps.Marker({{
-                  position: {{ lat: lat, lng: lng }},
-                  map: map,
-                  title: "PTU",
-                  // Opcional: Puedes definir un icono personalizado
-                  icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
-                }});
-                ptuMarker = marker;
-              }}
-
-              function drawHunterMarker(lat, lng) {{
-                var marker = new google.maps.Marker({{
-                  position: {{ lat: lat, lng: lng }},
-                  map: map,
-                  title: "Hunter",
-                  // Opcional: Puedes definir un icono personalizado
-                  icon: "http://maps.google.com/mapfiles/ms/icons/red-dot.png"
-                }}
-                );
-                hunterMarker = marker
-              }}
-
-            </script>
-          </head>
-          <body onload="initMap()">
-            <div id="map"></div>
-          </body>
-        </html>
-        """
-        self.setHtml(html)
+        base_url = QUrl.fromLocalFile(base_dir + os.sep)
+        self.setHtml(html, base_url)
 
     def _handleLoadFinished(self, ok):
         """Se llama cuando el HTML ha cargado."""
@@ -329,6 +108,11 @@ class SatelliteMap(QWebEngineView):
     def clearSelection(self):
         """Elimina la figura dibujada por el usuario (si existe)"""
         code = "clearUserOverlay();"
+        self.page().runJavaScript(code)
+      
+    def clearBeams(self):
+        """Elimina todos los beams dibujados (si existen)"""
+        code = "clearBeams(); clearHunterPath();"
         self.page().runJavaScript(code)
 
     def _execDrawBeam(self, coords, opacity=1.0):

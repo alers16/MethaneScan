@@ -8,6 +8,9 @@ from std_msgs.msg import String as ROSString
 import traceback
 import rosbag2_py
 import subprocess
+import pexpect
+import threading
+
 
 class MainController():
     def __init__(self, node):
@@ -45,6 +48,7 @@ class MainController():
                 - robot_configured (bool): Indicador de si el robot ha sido configurado.
                 - tdlas_data_list (list): Lista vacía para almacenar los datos del TDLAS.
                 - process (None): Proceso de escritura del rosbag, inicialmente sin asignar.
+                - child (None): Proceso hijo para la escritura del rosbag, inicialmente sin asignar.
         """
         self.PTU_position = None
         self.path = []  
@@ -54,9 +58,11 @@ class MainController():
         self.TDLAS_ready = False
         self.ptu_configured = False
         self.robot_configured = False
+        self.last_ptu_position = None
 
         self.tdlas_data_list = []
         self.process = None
+        self.child = None
 
     def init_bag(self):
         """
@@ -124,7 +130,7 @@ class MainController():
             self.view.register_ptu_config_callback(self.show_ptu_config)
             self.view.register_home_callback(self.show_home)
             self.view.register_robot_config_callback(self.show_robot_config)
-            
+
             # Connect dialog results
             if hasattr(self.view, 'ptu_config_dialog') and self.view.ptu_config_dialog is not None:
                 self.view.ptu_config_dialog.accepted.connect(self.on_ptu_dialog_accepted)
@@ -153,6 +159,11 @@ class MainController():
                 self.view.robot_config_widget.speed_saved.connect(self._update_robot_speed)
             else:
                 self.node.get_logger().warn("Robot config widget not available for event connection")
+            
+            if hasattr(self.view, 'simulation_tab') and self.view.simulation_tab is not None:
+                self.view.simulation_tab.error_signal.connect(self._show_error)
+
+            
                 
             self.widgets_connected = True
             self.node.get_logger().info("All UI events connected successfully")
@@ -869,7 +880,7 @@ class MainController():
     def test_start(self):
         """Test start button callback"""
         self.node.get_logger().info("Botón de inicio presionado")
-        self.process, _ = self._record_ros2_bag(self.node.get_parameter("TOPICS.play_simulation").
+        self.process, _ = self._record_ros2_bag(self.node.get_parameter("TOPICS.save_simulation").
                                                 value)
         msg = ROSString()
         msg.data = json.dumps({"path": self.path, "speed": self.robot_speed})
@@ -894,22 +905,21 @@ class MainController():
         try:
             if self.process:
                 self.process.terminate()
-                try:
-                    self.process.communicate(timeout=3)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
+                self.process.wait()
                 self.node.get_logger().info("Test finished successfully")
             else:
                 self.node.get_logger().warn("No process to terminate")
         except Exception as e:
             self.node.get_logger().error(f"Error finishing test: {str(e)}")
             traceback.print_exc()
+        
     
     def play_simulation(self, data : dict):
         try:
             if data is None:
                 self.node.get_logger().warn("Received null TDLAS data")
                 return
+            
             # Update TDLAS data in UI if available
             if (self.view is not None and 
                 hasattr(self.view, 'simulation_tab') and 
@@ -920,13 +930,21 @@ class MainController():
                 opacity = 0.9 * (data.get('tdlas_data').get('average_ppmxm', 0) / 150.0) + 0.1
                 
                 self.view.simulation_tab.map_frame.drawBeam(positions, opacity)
-                self.view.simulation_tab.map_frame.drawRobotMarker(data.get('hunter_position')['lat'], data.get('hunter_position')['lng'])
-                self.view.simulation_tab.map_frame.drawPTUMarker(data.get('ptu_position')[0], data.get('ptu_position')[1])
+                robot_pos = positions[1]
+                self.view.simulation_tab.map_frame.drawRobotMarker(robot_pos[0], robot_pos[1])
+
+                current_ptu = positions[0]
+                if current_ptu != self.last_ptu_position:
+                    self.view.simulation_tab.map_frame.drawPTUMarker(current_ptu[0], current_ptu[1])
+                    self.last_ptu_position = current_ptu
             else:
                 self.node.get_logger().warn("Could not update TDLAS data: UI components not available")
         except Exception as e:
             self.node.get_logger().error(f"Error updating TDLAS data: {str(e)}")
             traceback.print_exc
+    
+    def _show_error(self, message: str):
+        self.node.get_logger().error(message)
     
     def shutdown(self):
         """

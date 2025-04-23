@@ -8,5 +8,7 @@ methane_scan_node:
       initialize_hunter: /initialize_hunter_params
       start_hunter: /start_simulation
       end_simulation: /end_simulation
+      save_simulation: /save_simulation
       play_simulation: /data_playback
+
 
