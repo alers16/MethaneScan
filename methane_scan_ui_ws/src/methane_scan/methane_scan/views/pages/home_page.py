@@ -348,7 +348,7 @@ class HomePage(QWidget):
         lng  = position.get("lng", 0)
         self.robot_lat_label.setText(f"Latitud: {lat}")
         self.robot_lon_label.setText(f"Longitud: {lng}")
-        self.map_frame.drawRobotMarker(lat, lng)
+        self.map_frame.drawRobotMarker(lat, lng, False)
     
     def set_ready(self, ready):
         if ready:

@@ -176,6 +176,11 @@ function drawBeam(coordList, opacity = 1.0) {
   });
   beams.push(beam);
   beam.setMap(map);
+
+  beam.addListener('click', () => {
+    const idx = beams.indexOf(beam);
+    if(window.bridge) window.bridge.onBeamClicked(idx, path[1]);
+  });
 }
 
 // Elimina marcador PTU
@@ -218,24 +223,26 @@ function drawPTUMarker(lat, lng) {
 }
 
 // Dibuja marcador Hunter
-function drawHunterMarker(lat, lng) {
+function drawHunterMarker(lat, lng, isRunning) {
   // Construye el path del beam usando lat/lng actuales y los previos
-  const path = [
-    { lat, lng },
-    hunterLastPos
-      ? { lat: hunterLastPos[0], lng: hunterLastPos[1] }
-      : { lat, lng },
-  ];
-
-  const beam = new google.maps.Polyline({
-    path,
-    strokeColor: "black",
-    strokeOpacity: 1,
-    strokeWeight: 2,
-  });
-
-  hunter_path.push(beam);
-  beam.setMap(map);
+  if(isRunning == 1){
+    const path = [
+      { lat, lng },
+      hunterLastPos
+        ? { lat: hunterLastPos[0], lng: hunterLastPos[1] }
+        : { lat, lng },
+    ];
+  
+    const beam = new google.maps.Polyline({
+      path,
+      strokeColor: "black",
+      strokeOpacity: 1,
+      strokeWeight: 2,
+    });
+  
+    hunter_path.push(beam);
+    beam.setMap(map);
+  }
 
   const marker = new google.maps.Marker({
     position: { lat, lng },
@@ -245,4 +252,9 @@ function drawHunterMarker(lat, lng) {
   });
   hunterLastPos = [lat, lng];
   hunterMarker = marker;
+}
+
+function centerMap(lat, lng) {
+  map.setCenter({ lat, lng });
+  map.setZoom(20);
 }

@@ -22,6 +22,12 @@
         zoom: __ZOOM__
       };
     </script>
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+    <script>
+      new QWebChannel(qt.webChannelTransport, function(ch) {
+        window.bridge = ch.objects.bridge;
+      });
+    </script>
     <script src="map.js"></script>
   </head>
   <body>

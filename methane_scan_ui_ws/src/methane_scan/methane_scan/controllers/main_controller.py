@@ -404,6 +404,8 @@ class MainController():
                 hasattr(self.view.home_tab, 'map_frame')):
                 
                 self.view.home_tab.map_frame.drawPTUMarker(position[0], position[1])
+                if self.robot_position is None:
+                    self.view.home_tab.map_frame.centerMap(position[0], position[1])
             else:
                 self.node.get_logger().warn("Could not update map: UI components not available")
 
@@ -527,7 +529,8 @@ class MainController():
                 hasattr(self.view.home_tab, 'map_frame')):
                 
                 self.view.home_tab.set_robot_position(position)
-
+                if self.PTU_position is None:
+                    self.view.home_tab.map_frame.centerMap(position["lat"], position["lng"])
                 self.view.robot_config_widget.set_position(position)
             else:
                 self.node.get_logger().warn("Could not update map: UI components not available")
@@ -911,8 +914,7 @@ class MainController():
                 self.node.get_logger().warn("No process to terminate")
         except Exception as e:
             self.node.get_logger().error(f"Error finishing test: {str(e)}")
-            traceback.print_exc()
-        
+            traceback.print_exc()  
     
     def play_simulation(self, data : dict):
         try:
@@ -928,10 +930,17 @@ class MainController():
                 positions = [(data.get('ptu_position')[0], data.get('ptu_position')[1]),
                               (data.get('hunter_position')['lat'], data.get('hunter_position')['lng'])]
                 opacity = 0.9 * (data.get('tdlas_data').get('average_ppmxm', 0) / 150.0) + 0.1
-                
-                self.view.simulation_tab.map_frame.drawBeam(positions, opacity)
                 robot_pos = positions[1]
-                self.view.simulation_tab.map_frame.drawRobotMarker(robot_pos[0], robot_pos[1])
+
+                if len(self.view.simulation_tab.save_positions) <= 0:
+                    self.node.get_logger().info("No hay posiciones guardadas")
+                    self.view.simulation_tab.map_frame.centerMap(robot_pos[0], robot_pos[1])
+                
+                self.view.simulation_tab.set_robot_position(robot_pos)
+                self.view.simulation_tab.map_frame.drawBeam(positions, opacity)
+                self.view.simulation_tab.add_data_row(data.get('tdlas_data'))
+                self.view.simulation_tab.set_tdlas_data(data.get('tdlas_data'))
+                self.view.simulation_tab.save_positions.append({"lat": positions[1][0], "lng": positions[1][1]})
 
                 current_ptu = positions[0]
                 if current_ptu != self.last_ptu_position:

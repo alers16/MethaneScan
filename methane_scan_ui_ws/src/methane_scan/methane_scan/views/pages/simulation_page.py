@@ -1,18 +1,42 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QTableWidget,
-    QTableWidgetItem, QHeaderView, QSizePolicy, QGraphicsScene, QDialogButtonBox, QGroupBox, QLineEdit, QGridLayout,
-    QSplitter, QHBoxLayout, QVBoxLayout, QTableWidgetItem, QSpacerItem, QSizePolicy,
-    QFileDialog, QFrame, QToolButton, QStyle, QStyleOption
+    QTableWidgetItem, QHeaderView, QSizePolicy, QGroupBox, QLineEdit, QGridLayout,
+    QSplitter, QHBoxLayout, QVBoxLayout, QTableWidgetItem, QSizePolicy,
+    QFileDialog, QFrame, QAbstractItemView, 
 )
-from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QObject, QEvent
 
-import subprocess
 import threading
 import pexpect
 
 from methane_scan.views.components.map_view import SatelliteMap # type: ignore
-from methane_scan.views.components.device_card import DeviceCard # type: ignore
+
+class ResizeListener(QObject):
+    def __init__(self, target, threshold):
+        super().__init__(target)
+        self.threshold = threshold
+        self.triggered = False
+        self.callback_minus = None
+        self.callback_more = None
+        target.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Resize:
+            if obj.height() <= self.threshold and not self.triggered:
+                self.triggered = True
+                if self.callback_minus:
+                    self.callback_minus()
+            elif obj.height() > self.threshold and self.triggered:
+                self.triggered = False
+                if self.callback_more:
+                    self.callback_more()
+        return super().eventFilter(obj, event)
+    
+    def set_callback_minus(self, callback):
+        self.callback_minus = callback
+    
+    def set_callback_more(self, callback):
+        self.callback_more = callback
 
 class SimulationPage(QWidget):
     error_signal = pyqtSignal(str)
@@ -24,6 +48,7 @@ class SimulationPage(QWidget):
         self.file_path = None
         self._is_running = False
         self.child = None
+        self.save_positions = []
 
     def _build_ui(self):
         """Construye la interfaz de la primera pestaña (MethaneScan)."""
@@ -42,6 +67,7 @@ class SimulationPage(QWidget):
         self.map_frame = SatelliteMap(api_key=self._API_KEY)
         self.map_frame.setObjectName("mapFrame")
         self.map_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.map_frame.bridge.beamClicked.connect(self.select_data_row)
         map_layout.addWidget(self.map_frame)
         center_layout.addLayout(map_layout, stretch=3)
         
@@ -75,31 +101,36 @@ class SimulationPage(QWidget):
         control_layout.addLayout(file_layout)
 
         # --- Bloque de datos (Podemos usar un QFrame "interior") ---
-        data_frame = QFrame()
-        data_frame.setObjectName("controlDataFrame")  # Podríamos aplicar estilo propio si deseamos
-        data_layout = QVBoxLayout(data_frame)
-        data_layout.setContentsMargins(5, 5, 5, 5)
-        data_layout.setSpacing(6)
+        self.data_frame = QFrame()
+        self.data_frame.setObjectName("controlDataFrame")  # Podríamos aplicar estilo propio si deseamos
+        data_layout = QVBoxLayout(self.data_frame)
+        data_layout.setContentsMargins(5, 0, 5, 20)
+        data_layout.setSpacing(20)
 
-        # Título pequeño (sub-sección)
-        recent_data_title = QLabel("Últimas Datas Obtenidas")
-        recent_data_title.setStyleSheet("font-weight: bold; font-size: 14pt; margin-bottom: 6px;")
-        data_layout.addWidget(recent_data_title)
+        self.data_block = QWidget()
+        block_layout = QVBoxLayout(self.data_block)
 
-        self.methane_label = QLabel("Medición de Metano: N/A")
+        # 2) Prepara los labels
+        title_label = QLabel("Últimas Datas Obtenidas")
+        title_label.setStyleSheet("font-weight: bold; font-size: 14pt; margin-bottom: 6px;")
+
+        self.methane_label    = QLabel("Medición de Metano: N/A")
         self.reflection_label = QLabel("Fuerza de Reflexión: N/A")
-        self.absortion_label = QLabel("Fuerza de Absorción: N/A")
-        self.absortion_label.setContentsMargins(0, 0, 0, 20)
+        self.absortion_label  = QLabel("Fuerza de Absorción: N/A")
 
-        # Añadimos los labels al layout interno
-        data_layout.addWidget(self.methane_label)
-        data_layout.addWidget(self.reflection_label)
-        data_layout.addWidget(self.absortion_label)
+        for w in (title_label,
+                self.methane_label,
+                self.reflection_label,
+                self.absortion_label):
+            block_layout.addWidget(w)
+
+        # 3) Súbelo al layout principal
+        data_layout.addWidget(self.data_block)
 
         position_group = QGroupBox("Posición del Robot:")
         position_group.setStyleSheet("font-size: 14pt;")
         position_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        position_group.setContentsMargins(0, 0, 0, 70)
+        position_group.setStyleSheet("font-size: 14pt; ")
         position_group_layout = QGridLayout(position_group)
         position_group_layout.setContentsMargins(10, 10, 10, 10)
         position_group_layout.setHorizontalSpacing(10)
@@ -123,10 +154,10 @@ class SimulationPage(QWidget):
 
         legend_group = QGroupBox("Leyenda")
         legend_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        legend_group.setContentsMargins(10, 10, 10, 10)
         legend_group.setStyleSheet("font-size: 14pt;")
         legend_layout = QHBoxLayout(legend_group)
         legend_layout.setContentsMargins(10, 10, 10, 10)
-        legend_layout.setSpacing(10)
 
         #
         # 1) Leyenda de PTU
@@ -160,7 +191,7 @@ class SimulationPage(QWidget):
 
         robot_color_label = QLabel()
         robot_color_label.setFixedSize(20, 20)
-        # Ejemplo: un azul para el Robot/Hunter
+
         robot_color_label.setStyleSheet("""
             background-color: #fd7567; /* Azul Robot */
             border: 1px solid #444444;
@@ -222,9 +253,49 @@ class SimulationPage(QWidget):
 
         data_layout.addWidget(legend_group)
 
-        data_frame.setLayout(data_layout)
-        control_layout.addWidget(data_frame)
+        # --- Botones de control ---
+        actions_group = QGroupBox("Acciones")
+        actions_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        actions_group.setStyleSheet("font-size: 14pt; ")
+        actions_layout = QHBoxLayout(actions_group)
+        actions_layout.setContentsMargins(10, 10, 10, 10)
+        actions_layout.setSpacing(10)
 
+        actions_grid = QGridLayout()
+        actions_grid.setContentsMargins(10, 10, 10, 10)
+        actions_grid.setHorizontalSpacing(10)
+        actions_grid.setVerticalSpacing(10)
+
+        self.btn_next_message= QPushButton("Siguiente Msg")
+        self.btn_next_message.setObjectName("btnNextMessage")
+        self.btn_next_message.setDisabled(True)
+        self.btn_next_message.clicked.connect(self._on_next_message)
+
+        self.btn_increase_rate = QPushButton("Aumentar Frec")
+        self.btn_increase_rate.setObjectName("btnIncreaseRate")
+        self.btn_increase_rate.setDisabled(True)
+        self.btn_increase_rate.clicked.connect(self._increase_rate)
+
+        self.btn_decrease_rate = QPushButton("Disminuir Frec")
+        self.btn_decrease_rate.setObjectName("btnDecreaseRate")
+        self.btn_decrease_rate.setDisabled(True)
+        self.btn_decrease_rate.clicked.connect(self._decrease_rate)
+
+        self.btn_clean_map = QPushButton("Limpiar Mapa")
+        self.btn_clean_map.setObjectName("btnCleanMap")
+        self.btn_clean_map.setDisabled(True)
+        self.btn_clean_map.clicked.connect(self._clear_map)
+
+        actions_grid.addWidget(self.btn_next_message, 0, 1)
+        actions_grid.addWidget(self.btn_increase_rate, 0, 0)
+        actions_grid.addWidget(self.btn_decrease_rate, 1, 0)
+        actions_grid.addWidget(self.btn_clean_map, 1, 1)
+
+        actions_layout.addLayout(actions_grid)
+        data_layout.addWidget(actions_group)
+        
+        self.data_frame.setLayout(data_layout)
+        control_layout.addWidget(self.data_frame)
 
         # Un estirador para “empujar” los botones al final
         control_layout.addStretch()
@@ -262,7 +333,11 @@ class SimulationPage(QWidget):
         # 2) Panel superior: mapa + control
         top_panel = QWidget()
         top_panel.setLayout(center_layout)
-        top_panel.setMinimumHeight(500)
+        top_panel.setMinimumHeight(600)
+
+        listener = ResizeListener(top_panel, 750)
+        listener.set_callback_minus(lambda: self.data_block.hide())
+        listener.set_callback_more(lambda: self.data_block.show())
 
         # 3) Panel inferior: Datos Obtenidos (etiqueta + tabla)
         bottom_panel = QWidget()
@@ -271,11 +346,19 @@ class SimulationPage(QWidget):
         lbl_data = QLabel("Datos Obtenidos")
         lbl_data.setStyleSheet("font-weight: bold; font-size: 14pt;")
         bottom_layout.addWidget(lbl_data)
+
         # Tabla
-        self.table = QTableWidget(3, 3)
-        self.table.setHorizontalHeaderLabels(["Medidas del láser", "Medidas del viento", "Timestamp"])
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["average_ppmxm", "average_reflection_strength", "average_absorption_strength", "timestamp"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self._populate_sample_rows()
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
+        self.table.cellClicked.connect(self._on_table_cell_clicked)
+        self.table.itemClicked.connect(self._on_table_item_clicked)
+        self.table.clicked.connect(self._on_table_index_clicked)
+        self.table.verticalHeader().sectionClicked.connect(self._on_table_index_clicked)
+
+        #self._populate_sample_rows()
         bottom_layout.addWidget(self.table)
         bottom_panel.setMinimumHeight(150)
 
@@ -296,12 +379,12 @@ class SimulationPage(QWidget):
         self.reflection_label.setText(f"Fuerza de Reflexión: {data['average_reflection_strength']}")
         self.absortion_label.setText(f"Fuerza de Absorción: {data['average_absorption_strength']}")
     
-    def set_robot_position(self, position):
-        lat  = position.get("lat", 0)
-        lng  = position.get("lng", 0)
+    def set_robot_position(self, position, is_running=True):
+        lat  = position[0]
+        lng  = position[1]
         self.robot_lat_label.setText(f"Latitud: {lat}")
         self.robot_lon_label.setText(f"Longitud: {lng}")
-        self.map_frame.drawRobotMarker(lat, lng)
+        self.map_frame.drawRobotMarker(lat, lng, is_running)
     
     def set_ready(self, ready):
         if ready:
@@ -321,6 +404,45 @@ class SimulationPage(QWidget):
             self.table.setItem(row, 1, QTableWidgetItem(wind))
             self.table.setItem(row, 2, QTableWidgetItem(ts))
 
+    def add_data_row(self, data):
+        # Añadir una nueva fila con los datos
+        row_position = self.table.rowCount()
+        self.table.insertRow(row_position)
+        item = QTableWidgetItem(f"{data['average_ppmxm']}")
+        item.setTextAlignment(Qt.AlignCenter)
+        self.table.setItem(row_position, 0, item)
+        item = QTableWidgetItem(f"{data['average_reflection_strength']}")
+        item.setTextAlignment(Qt.AlignCenter)
+        self.table.setItem(row_position, 1, item)
+        item = QTableWidgetItem(f"{data['average_absorption_strength']}")
+        item.setTextAlignment(Qt.AlignCenter)
+        self.table.setItem(row_position, 2, item)
+        
+        stamp = data['header']['stamp']
+        sec = stamp.get("sec", 0)
+        nanosec = stamp.get("nanosec", 0)
+        timestamp = sec + nanosec * 1e-9
+        item = QTableWidgetItem(f"{timestamp:.9f}")
+        item.setTextAlignment(Qt.AlignCenter)
+        self.table.setItem(row_position, 3, item)
+
+        self.table.scrollToBottom()
+
+    def select_data_row(self, row, position):
+        # Seleccionar una fila específica
+        if 0 <= row < self.table.rowCount():
+            self.table.selectRow(row)
+            self.table.scrollToItem(self.table.item(row, 0))
+            self.set_data_text(row, position)
+            
+    def set_data_text(self, row, position):
+        self.set_tdlas_data({
+                "average_ppmxm": self.table.item(row, 0).text(),
+                "average_reflection_strength": self.table.item(row, 1).text(),
+                "average_absorption_strength": self.table.item(row, 2).text(),
+        })
+        self.set_robot_position([position["lat"], position["lng"]], is_running=False)
+
     def _make_separator(self):
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
@@ -337,21 +459,45 @@ class SimulationPage(QWidget):
     
     def _pause_simulation(self):
         if self.child and self.child.isalive():
+            if not self._is_running:
+                position = self.save_positions[self.table.rowCount()-1]
+                self.set_robot_position(position=[position["lat"], position["lng"]], is_running=False)
+                self.btn_next_message.setDisabled(True)
+            else:
+                self.btn_next_message.setDisabled(False)
             self.child.send(' ')
             txt = "Reanudar" if self._is_running else "Pausar"
             self.btn_pausar.setText(txt)
             self._is_running = not self._is_running
     
-    def start_simulation(self):
-        self._start_process()
+    def _increase_rate(self):
+        if self.child and self.child.isalive():
+            self.child.send('\x1b[A')
+    
+    def _decrease_rate(self):
+        if self.child and self.child.isalive():
+            self.child.send('\x1b[B')
+    
+    def _on_next_message(self):
+        if self.child and self.child.isalive():
+            self.child.send('\x1b[C')
 
+    def _clear_map(self):
         self.map_frame.clearBeams()
         self.map_frame.deleteHunterMarker()
         self.map_frame.deletePTUMarker()
+        self.save_positions = []
+        self.table.setRowCount(0)
+        self.btn_clean_map.setDisabled(True)
+
+    def start_simulation(self):
+        self._start_process()
+
         # Deshabilitar el botón de iniciar y habilitar el de abortar
         self.btn_iniciar.setDisabled(True)
         self.btn_pausar.setDisabled(False)
         self.btn_abortar.setDisabled(False)
+        self.change_button_rosbag(False)
         self.btn_pausar.setText("Pausar")
         self._is_running = True
 
@@ -367,12 +513,34 @@ class SimulationPage(QWidget):
         self.btn_iniciar.setDisabled(False)
         self.btn_pausar.setDisabled(True)
         self.btn_abortar.setDisabled(True)
+        self.btn_clean_map.setDisabled(False)
+        self.change_button_rosbag(True)
+        self.btn_next_message.setDisabled(True)
         self._is_running = False
         self.child       = None
 
     def _start_process(self):
         cmd = f"ros2 bag play {self.file_path} --remap /save_simulation:=/data_playback"
         self.child = pexpect.spawn(cmd, encoding='utf-8', echo=True)
+
+    def _on_table_cell_clicked(self, row, col):
+        self.set_data_text(row, self.save_positions[row])
+    
+    def _on_table_item_clicked(self, item):
+        row = item.row()
+        col = item.column()
+        if col == 0:
+            self.select_data_row(row, self.save_positions[row])
+    
+    def _on_table_index_clicked(self, index):
+        row = index.row()
+        col = index.column()
+        if col == 0:
+            self.select_data_row(row, self.save_positions[row])
+
+    def change_button_rosbag(self, state):
+        self.btn_increase_rate.setDisabled(state)
+        self.btn_decrease_rate.setDisabled(state)
 
     def abort_simulation(self):
         if self.child and self.child.isalive():

@@ -1,6 +1,20 @@
 import os
-from PyQt5.QtCore import QUrl
+from PyQt5.QtCore import QUrl, QObject, pyqtSignal, pyqtSlot, QVariant
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
+from PyQt5.QtWebChannel import QWebChannel
+
+class MapBridge(QObject):
+    beamClicked = pyqtSignal(int, dict)
+
+    @pyqtSlot(int, QVariant)
+    def onBeamClicked(self, index, position):
+        data = position
+        if isinstance(data, QVariant):
+            try:
+                data = data.toPyObject()
+            except Exception:
+                data = dict(data)
+        self.beamClicked.emit(index, data)
 
 class MyWebEnginePage(QWebEnginePage):
     def __init__(self, parent=None):
@@ -16,6 +30,12 @@ class SatelliteMap(QWebEngineView):
         super().__init__(parent)
 
         self.setPage(MyWebEnginePage(self))
+
+        # instalar QWebChannel
+        self.bridge = MapBridge()
+        channel = QWebChannel(self.page())
+        channel.registerObject('bridge', self.bridge)
+        self.page().setWebChannel(channel)
         
         # Control de carga
         self._isLoaded = False
@@ -93,7 +113,7 @@ class SatelliteMap(QWebEngineView):
           self.page().runJavaScript(code)
           self.PTU_coordinates = (lat, lng)
 
-    def drawRobotMarker(self, lat, lng):
+    def drawRobotMarker(self, lat, lng, is_running):
         """Dibuja un marcador en la posición especificada."""
         if not self._isLoaded:
             # Todavía no ha cargado, encolamos
@@ -101,7 +121,7 @@ class SatelliteMap(QWebEngineView):
         else:
           if self.robot_coordinates:
             self.deleteHunterMarker()
-          code = f"drawHunterMarker({lat}, {lng});"
+          code = f"drawHunterMarker({lat}, {lng}, {1 if is_running else 0});"
           self.page().runJavaScript(code)
           self.robot_coordinates = (lat, lng)
       
@@ -142,3 +162,8 @@ class SatelliteMap(QWebEngineView):
     def deleteHunterMarker(self):
         """Elimina el marcador Hunter (si existe)"""
         self.page().runJavaScript("deleteHunterMarker();")
+
+    def centerMap(self, lat, lng):
+        """Centra el mapa en la posición especificada."""
+        code = f"centerMap({lat}, {lng});"
+        self.page().runJavaScript(code)
