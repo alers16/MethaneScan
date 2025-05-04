@@ -5,6 +5,7 @@ let ptuMarker = null;
 let hunterMarker = null;
 let beams = [];
 let hunter_path = [];
+let trajectories = [];
 let hunterLastPos = null;
 
 let isDrawingEnabled = false;
@@ -181,6 +182,42 @@ function drawBeam(coordList, opacity = 1.0) {
     const idx = beams.indexOf(beam);
     if(window.bridge) window.bridge.onBeamClicked(idx, path[1]);
   });
+}
+
+// Dibuja una trayectoria “a mano” usando un array de [lat, lng] o {lat, lng}/{latitude, longitude}
+function drawTrajectory(coords) {
+  // Verifica que coords sea un array con al menos dos puntos
+  if (!Array.isArray(coords) || coords.length < 2) return;
+
+  // Construye el path en formato {lat, lng}
+  const path = coords.map(pt => ({
+    lat: pt.latitude !== undefined ? pt.latitude : pt.lat,
+    lng: pt.longitude !== undefined ? pt.longitude : pt.lng
+  }));
+
+  // Crea y dibuja la polilínea
+  const trajectory = new google.maps.Polyline({
+    path,
+    strokeColor: "black",
+    strokeOpacity: 1.0,
+    strokeWeight: 3,
+    clickable: false,
+    editable: false,
+    geodesic: true
+  });
+
+  trajectory.setMap(map);
+
+  // Guarda la trayectoria para poder borrarla luego
+  trajectories.push(trajectory);
+
+  return trajectory;
+}
+
+// Elimina todas las trayectorias manuales
+function clearTrajectories() {
+  trajectories.forEach(t => t.setMap(null));
+  trajectories = [];
 }
 
 // Elimina marcador PTU

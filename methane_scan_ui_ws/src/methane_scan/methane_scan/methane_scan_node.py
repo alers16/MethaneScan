@@ -420,9 +420,9 @@ def main(args=None):
         
         # Register callbacks in a thread-safe way
         node.register_callbacks(
-            ptu_ready_callback=controller.update_PTU_ready,
-            hunter_position_callback=controller.update_hunter_position,
-            TDLAS_ready_callback=controller.update_TDLAS_ready,
+            ptu_ready_callback=controller.ptu_controller.update_PTU_ready,
+            hunter_position_callback=controller.robot_controller.update_hunter_position,
+            TDLAS_ready_callback=controller.tdlas_controller.update_TDLAS_ready,
             TDLAS_data_callback=controller.update_TDLAS_data,
             end_simulation_callback=controller.finish_test,
             play_simulation_callback=controller.play_simulation

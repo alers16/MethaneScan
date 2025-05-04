@@ -7,5 +7,8 @@
         <file alias="icon_Perception.svg">resources/crosshair.svg</file>
         <file alias="icon_Detection.svg">resources/eye.svg</file>
         <file alias="icon_State.svg">resources/gear-fill.svg</file>
+        <file alias="icon_Trayectoria.svg">resources/pin-map-fill.svg</file>
+        <file alias="icon_DeteleTraj.svg">resources/trash-fill.svg</file>
+        <file alias="icon_RenameTraj.svg">resources/pencil-square.svg</file>
     </qresource>
 </RCC>

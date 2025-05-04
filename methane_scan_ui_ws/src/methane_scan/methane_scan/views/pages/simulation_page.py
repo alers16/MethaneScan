@@ -44,11 +44,13 @@ class SimulationPage(QWidget):
         super().__init__()
         self.setObjectName("methaneScanTab")
         self._API_KEY = API_KEY
+        self.frecuency = 1.0
         self._build_ui()
         self.file_path = None
         self._is_running = False
         self.child = None
         self.save_positions = []
+        
 
     def _build_ui(self):
         """Construye la interfaz de la primera pestaña (MethaneScan)."""
@@ -286,10 +288,14 @@ class SimulationPage(QWidget):
         self.btn_clean_map.setDisabled(True)
         self.btn_clean_map.clicked.connect(self._clear_map)
 
+        self.frecuency_label = QLabel(f"Frecuencia: {self.frecuency:.2f} Hz")
+        self.frecuency_label.setStyleSheet("font-size: 10pt;")
+
         actions_grid.addWidget(self.btn_next_message, 0, 1)
         actions_grid.addWidget(self.btn_increase_rate, 0, 0)
         actions_grid.addWidget(self.btn_decrease_rate, 1, 0)
         actions_grid.addWidget(self.btn_clean_map, 1, 1)
+        actions_grid.addWidget(self.frecuency_label, 2, 0)
 
         actions_layout.addLayout(actions_grid)
         data_layout.addWidget(actions_group)
@@ -333,9 +339,9 @@ class SimulationPage(QWidget):
         # 2) Panel superior: mapa + control
         top_panel = QWidget()
         top_panel.setLayout(center_layout)
-        top_panel.setMinimumHeight(600)
+        top_panel.setMinimumHeight(650)
 
-        listener = ResizeListener(top_panel, 750)
+        listener = ResizeListener(top_panel, 780)
         listener.set_callback_minus(lambda: self.data_block.hide())
         listener.set_callback_more(lambda: self.data_block.show())
 
@@ -473,10 +479,15 @@ class SimulationPage(QWidget):
     def _increase_rate(self):
         if self.child and self.child.isalive():
             self.child.send('\x1b[A')
+            self.frecuency = self.frecuency * 1.1
+            self.frecuency_label.setText(f"Frecuencia: {(self.frecuency):.2f}")
+
     
     def _decrease_rate(self):
         if self.child and self.child.isalive():
             self.child.send('\x1b[B')
+            self.frecuency = self.frecuency * 0.9
+            self.frecuency_label.setText(f"Frecuencia: {(self.frecuency):.2f}")
     
     def _on_next_message(self):
         if self.child and self.child.isalive():
@@ -489,6 +500,7 @@ class SimulationPage(QWidget):
         self.save_positions = []
         self.table.setRowCount(0)
         self.btn_clean_map.setDisabled(True)
+
 
     def start_simulation(self):
         self._start_process()

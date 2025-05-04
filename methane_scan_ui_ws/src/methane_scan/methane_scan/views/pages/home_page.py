@@ -5,14 +5,22 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import Qt, pyqtSignal
 
+import pickle
+import time
+import requests
+import os
+
 from methane_scan.views.components.map_view import SatelliteMap # type: ignore
 from methane_scan.views.components.device_card import DeviceCard # type: ignore
+
+DATA_STORE = "map_previews.data"
 
 class HomePage(QWidget):
     path_saved = pyqtSignal(list)
 
-    def __init__(self, API_KEY):
+    def __init__(self, API_KEY, parent=None):
         super().__init__()
+        self.parent = parent
         self.setObjectName("methaneScanTab")
         self._API_KEY = API_KEY
         self._build_ui()
@@ -55,7 +63,6 @@ class HomePage(QWidget):
         
         # Botones de zoom, seleccionar área e importar datos
         self.btn_select_area = QPushButton("Seleccionar Área")
-        self.btn_select_area.clicked.connect(self.selectArea)
         self.btn_clean_area= QPushButton("Limpiar Área")
         self.btn_clean_area.setDisabled(True)
         self.btn_clean_area.clicked.connect(self.cleanSelection)
@@ -295,21 +302,116 @@ class HomePage(QWidget):
         # Usamos una lambda para ignorar el argumento 'event' y llamar al callback inyectado
         self.card_robot.mousePressEvent = lambda event: callback()
 
+    def register_trajectory_callback(self, callback):
+        self.trajectory_callback = callback
+        self.btn_select_area.clicked.connect(lambda event: callback())
+
     def onGetRectCorners(self):
         # Llamamos a getRectangleCorners y definimos un callback
         self.map_frame.getCorners(self.handleRectCorners)
     
     def selectArea(self):
         self.map_frame.enableDrawing()
+        self.cleanSelection()
         self.btn_select_area.setText("Guardar Selección")
+        try:
+            self.btn_select_area.clicked.disconnect()
+        except TypeError:
+            pass
         self.btn_select_area.clicked.connect(self.saveSelection)
+
+
+    def selectTrajectory(self, coords):
+        self.cleanSelection()
+        self.map_frame.drawTrajectory(coords)
+        self.btn_select_area.setText("Seleccionar Area")
+        self.map_frame.disableDrawing()
+        try:
+            self.btn_select_area.clicked.disconnect()
+        except TypeError:
+            pass
+        self.btn_select_area.clicked.connect(self.trajectory_callback)
+        self.btn_clean_area.setDisabled(False)
+        if coords:
+            self.path_saved.emit(coords)
+
+
 
     def saveSelection(self):
         self.btn_select_area.setText("Seleccionar Area")
         self.map_frame.disableDrawing()
-        self.btn_select_area.clicked.connect(self.selectArea)
+        try:
+            self.btn_select_area.clicked.disconnect()
+        except TypeError:
+            pass
+        self.btn_select_area.clicked.connect(self.trajectory_callback)
         self.map_frame.getCorners(self.handleCorners)
         self.btn_clean_area.setDisabled(False)
+
+    def get_map_preview(self, coords,
+                    width=600, height=300, zoom=18):
+        """
+        Captura una vista previa de toda la trayectoria en modo satélite usando Google Static Maps API.
+        - Dibuja líneas entre todos los puntos en 'coords' en un solo mapa.
+        - Marcador verde en el inicio y rojo en el final.
+        - Retorna los bytes de la imagen.
+        """
+        if not coords or len(coords) < 2:
+            raise ValueError("Se requieren al menos dos puntos para generar la ruta.")
+
+        path_points = "|".join(f"{coord['latitude']},{coord['longitude']}" for coord in coords)
+        path = f"path=color:0x00ffff|weight:5|{path_points}"
+
+        params = {
+            "size": f"{width}x{height}",
+            "zoom": str(zoom),
+            "maptype": "satellite",
+            "scale": "2",
+            "key": self._API_KEY,
+        }
+        base_url = "https://maps.googleapis.com/maps/api/staticmap"
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        url = f"{base_url}?{query}&{path}"
+
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.content
+    
+    def save_map_preview(self, nombre, coords):
+        """
+        Genera la imagen de la trayectoria con coords y almacena bajo 'nombre'.
+        - nombre: clave bajo la que se guardará la vista previa.
+        - coords: lista de tuplas (lat, lng) para trazar la ruta.
+        Guarda en DATA_STORE un dict con 'map'.
+        Si el archivo no existe, lo crea.
+        """
+        # 1) Obtener bytes de la imagen
+        data = self.get_map_preview(coords)
+
+        # 2) Asegurarse de que la carpeta (si la hay) exista
+        directory = os.path.dirname(DATA_STORE)
+        if directory and not os.path.isdir(directory):
+            os.makedirs(directory)
+
+        # 3) Si el archivo no existe, inicializarlo con un dict vacío
+        if not os.path.exists(DATA_STORE):
+            with open(DATA_STORE, 'wb') as f:
+                pickle.dump({}, f)
+
+        # 4) Cargar el store existente
+        try:
+            with open(DATA_STORE, 'rb') as f:
+                store = pickle.load(f)
+        except (EOFError, pickle.UnpicklingError):
+            store = {}
+
+        # 5) Actualizar y guardar
+        store[nombre] = {
+            'map': data,
+            'coords': coords
+        }
+        with open(DATA_STORE, 'wb') as f:
+            pickle.dump(store, f)
 
     def cleanSelection(self):
         self.map_frame.clearSelection()
@@ -323,10 +425,23 @@ class HomePage(QWidget):
         """
         if corners is not None:
             self.path_saved.emit(corners)
+            self.save_map_preview(time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime()), corners)
+
+            self.parent.select_trajectory_widget.refresh_trajectories()
     
-    def enableStartButton(self, callback):
+    def enableStartButtonCallback(self, callback):
         self.btn_iniciar.setDisabled(False)
         self.btn_iniciar.clicked.connect(callback)
+        self.btn_iniciar.clicked.connect(self.disableStartButton)
+
+    def enableStartButton(self):
+        self.btn_iniciar.setDisabled(False)
+        self.btn_abortar.setDisabled(True)
+
+    def disableStartButton(self):
+        self.btn_iniciar.setDisabled(True)
+        self.btn_abortar.setDisabled(False)
+    
     
     def set_device_status(self, device, status, errors = []):
         if device == "PTU":

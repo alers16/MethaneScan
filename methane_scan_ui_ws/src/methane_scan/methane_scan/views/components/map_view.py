@@ -89,6 +89,7 @@ class SatelliteMap(QWebEngineView):
         """Invoca getCorners() en JS y llama a 'callback' con la lista de esquinas."""
         code = "getCorners();"
         self.page().runJavaScript(code, callback)
+        
 
     def drawBeam(self, coords, opacity=1.0):
         """
@@ -100,6 +101,18 @@ class SatelliteMap(QWebEngineView):
         else:
             # Ya está cargado, dibujamos directamente
             self._execDrawBeam(coords, opacity)
+    
+    def drawTrajectory(self, coords, opacity=1.0):
+        """
+        coords: lista de tuplas (lat, lng), ej: [(lat1, lng1), (lat2, lng2), ...]
+        """
+        if not self._isLoaded:
+            # Todavía no ha cargado, encolamos
+            self._pendingBeams.append(coords)
+        else:
+            # Ya está cargado, dibujamos directamente
+            command = f"drawTrajectory({coords});"
+            self.page().runJavaScript(command)
     
     def drawPTUMarker(self, lat, lng):
         """Dibuja un marcador en la posición especificada."""
@@ -127,7 +140,7 @@ class SatelliteMap(QWebEngineView):
       
     def clearSelection(self):
         """Elimina la figura dibujada por el usuario (si existe)"""
-        code = "clearUserOverlay();"
+        code = "clearUserOverlay(); clearBeams(); clearTrajectories();"
         self.page().runJavaScript(code)
       
     def clearBeams(self):

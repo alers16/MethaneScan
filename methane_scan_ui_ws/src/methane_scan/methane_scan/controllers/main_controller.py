@@ -2,15 +2,18 @@
 import json
 import time
 from typing import Tuple
+from methane_scan.controllers.robot_controller import RobotController
+from methane_scan.controllers.tdlas_controller import TDLASController
+from methane_scan.controllers.ptu_controller import PTUController
 from methane_scan.views.main_window import MainWindow # type: ignore
 
 from std_msgs.msg import String as ROSString
 import traceback
+from PyQt5.QtCore import pyqtSlot
 import rosbag2_py
 import subprocess
 import pexpect
 import threading
-
 
 class MainController():
     def __init__(self, node):
@@ -24,8 +27,14 @@ class MainController():
         
         try:
             self.view = MainWindow()
+            self.robot_controller = RobotController(node, self.view)
+            self.tdlas_controller = TDLASController(node, self.view)
+            self.ptu_controller = PTUController(node, self.view)
+
             # Connect signals and callbacks
             self._connect_events()
+            self._connect_signals()
+
             self.initialized = True
             self.node.get_logger().info("MainController initialized successfully")
         except Exception as e:
@@ -33,33 +42,47 @@ class MainController():
             traceback.print_exc()
             self.view = None
 
+    def _connect_signals(self):
+        """
+        Conecta las señales de la vista a los slots del controlador.
+
+        Este método se encarga de conectar las señales emitidas por los
+        componentes de los sub-controladores a los métodos correspondientes en el
+        controlador.
+
+        No retorna ningún valor.
+        """
+        try:
+            # Connect signals from RobotController
+            self.robot_controller.signals.robotReady.connect(self.check_publish)
+            self.robot_controller.signals.robotReady.connect(self.check_all_ready)
+            self.robot_controller.signals.dialogActive.connect(self._on_dialog_active)
+
+            # Connect signals from TDLASController
+            self.tdlas_controller.signals.tdlasReady.connect(self.check_all_ready)
+
+            # Connect signals from PTUController
+            self.ptu_controller.signals.ptuReady.connect(self.check_all_ready)
+            self.ptu_controller.signals.ptuPosition.connect(self.check_publish)
+            self.ptu_controller.signals.dialogActive.connect(self._on_dialog_active)
+
+        except Exception as e:
+            self.node.get_logger().error(f"Error connecting signals: {str(e)}")
+            traceback.print_exc()
+
+    def _on_dialog_active(self, active: bool):
+        """Slot que actualiza self.dialog_active cuando el PTU o el robot abre/cierra su diálogo."""
+        self.dialog_active = active
+
     def _init_parameters(self):
         """
             Inicializa los parámetros necesarios para el controlador.
 
             Atributos:
-                - PTU_position (None): Posición del PTU, inicialmente sin asignar.
-                - path (list): Lista vacía para almacenar la trayectoria.
-                - PTU_ready (bool): Indicador de si el PTU está listo para operar.
-                - robot_speed (None): Velocidad del robot, inicialmente sin asignar.
-                - robot_position (None): Posición del robot, inicialmente sin asignar.
-                - TDLAS_ready (bool): Indicador de si el sistema TDLAS está listo para operar.
-                - ptu_configured (bool): Indicador de si el PTU ha sido configurado.
-                - robot_configured (bool): Indicador de si el robot ha sido configurado.
                 - tdlas_data_list (list): Lista vacía para almacenar los datos del TDLAS.
                 - process (None): Proceso de escritura del rosbag, inicialmente sin asignar.
                 - child (None): Proceso hijo para la escritura del rosbag, inicialmente sin asignar.
         """
-        self.PTU_position = None
-        self.path = []  
-        self.PTU_ready = False
-        self.robot_speed = None
-        self.robot_position = None
-        self.TDLAS_ready = False
-        self.ptu_configured = False
-        self.robot_configured = False
-        self.last_ptu_position = None
-
         self.tdlas_data_list = []
         self.process = None
         self.child = None
@@ -122,41 +145,46 @@ class MainController():
         No se devuelve ningún valor.
         """
         if self.view is None:
-            self.node.get_logger().error("Cannot connect events: view is not initialized")
+            self.node.get_logger().error("Cannot connect events: view isW not initialized")
             return
         
         try:
             # Navigation callbacks
-            self.view.register_ptu_config_callback(self.show_ptu_config)
+            self.view.register_ptu_config_callback(self.ptu_controller.show_ptu_config)
             self.view.register_home_callback(self.show_home)
-            self.view.register_robot_config_callback(self.show_robot_config)
+            self.view.register_robot_config_callback(self.robot_controller.show_robot_config)
+            self.view.register_select_trajectory_callback(self.robot_controller.show_trajectory_config)
 
             # Connect dialog results
             if hasattr(self.view, 'ptu_config_dialog') and self.view.ptu_config_dialog is not None:
-                self.view.ptu_config_dialog.accepted.connect(self.on_ptu_dialog_accepted)
-                self.view.ptu_config_dialog.rejected.connect(self.on_ptu_dialog_rejected)
+                self.view.ptu_config_dialog.accepted.connect(self.ptu_controller.on_ptu_dialog_accepted)
+                self.view.ptu_config_dialog.rejected.connect(self.ptu_controller.on_ptu_dialog_rejected)
             else:
                 self.node.get_logger().warn("PTU config dialog not available for event connection")
             
             if hasattr(self.view, 'robot_config_dialog') and self.view.robot_config_dialog is not None:
-                self.view.robot_config_dialog.accepted.connect(self.on_robot_dialog_accepted)
-                self.view.robot_config_dialog.rejected.connect(self.on_robot_dialog_rejected)
+                self.view.robot_config_dialog.accepted.connect(self.robot_controller.on_robot_dialog_accepted)
+                self.view.robot_config_dialog.rejected.connect(self.robot_controller.on_robot_dialog_rejected)
             else:
                 self.node.get_logger().warn("Robot config dialog not available for event connection")
+
+            if hasattr(self.view, 'select_trajectory_dialog') and self.view.select_trajectory_dialog is not None:
+                self.view.select_trajectory_dialog.accepted.connect(self.robot_controller.on_trajectory_dialog_accepted)
+                self.view.select_trajectory_dialog.rejected.connect(self.robot_controller.on_trajectory_dialog_rejected)
                 
             # Connect widget signals if available
             if hasattr(self.view, 'ptu_config_widget') and self.view.ptu_config_widget is not None:
-                self.view.ptu_config_widget.position_saved.connect(self._update_ptu_position)
+                self.view.ptu_config_widget.position_saved.connect(self.ptu_controller.update_ptu_position)
             else:
                 self.node.get_logger().warn("PTU config widget not available for event connection")
                 
             if hasattr(self.view, 'home_tab') and self.view.home_tab is not None:
-                self.view.home_tab.path_saved.connect(self._update_path)
+                self.view.home_tab.path_saved.connect(self.robot_controller._update_path)
             else:
                 self.node.get_logger().warn("Methane scan tab not available for event connection")
                 
             if hasattr(self.view, 'robot_config_widget') and self.view.robot_config_widget is not None:
-                self.view.robot_config_widget.speed_saved.connect(self._update_robot_speed)
+                self.view.robot_config_widget.speed_saved.connect(self.robot_controller.update_robot_speed)
             else:
                 self.node.get_logger().warn("Robot config widget not available for event connection")
             
@@ -171,30 +199,6 @@ class MainController():
             self.node.get_logger().error(f"Error connecting events: {str(e)}")
             traceback.print_exc()
         
-    def show_ptu_config(self):
-        """
-        Muestra el diálogo de configuración del PTU.
-        Este método verifica si la vista está inicializada antes de intentar mostrar el diálogo de configuración.
-        Si la vista no está inicializada, registra un error y aborta la operación. Durante la ejecución, se actualiza
-        el estado de la variable `dialog_active` para evitar conflictos. Se registran mensajes en el log tanto para la
-        apertura exitosa del diálogo como para cualquier error que se produzca, en cuyo caso se imprime el traceback.
-        Raises:
-            Exception: Si ocurre un error inesperado al intentar cambiar al diálogo de configuración del PTU.
-        """
-        if self.view is None:
-            self.node.get_logger().error("Cannot show PTU config: view is not initialized")
-            return
-            
-        try:
-            self.dialog_active = True
-            self.node.get_logger().info("Opening PTU configuration dialog")
-            self.view.switch_to_ptu_config()
-            self.node.get_logger().info("PTU configuration dialog opened")
-        except Exception as e:
-            self.dialog_active = False
-            self.node.get_logger().error(f"Error opening PTU config dialog: {str(e)}")
-            traceback.print_exc()
-
     def show_home(self):
         """
         Regresa a la pantalla principal cerrando cualquier diálogo abierto.
@@ -218,35 +222,6 @@ class MainController():
         except Exception as e:
             self.node.get_logger().error(f"Error returning to home: {str(e)}")
             traceback.print_exc()
-
-    def show_robot_config(self):
-        """
-        Muestra el diálogo de configuración del robot e informa de cada cambio
-        en el estado de la vista.
-
-        Si la vista no está inicializada, se registra un error y se retorna sin
-        realizar ninguna acción. Durante la ejecución, se activa la bandera
-        'dialog_active' para controlar el estado del diálogo. 
-        Se registran mensajes de información y de error utilizando el logger del nodo, 
-        de forma que se notifique la apertura correcta o la ocurrencia de alguna excepción.
-
-        Excepciones:
-            - Captura y registra cualquier excepción que se produzca al intentar
-            - cambiar la vista a la configuración del robot.
-        """
-        if self.view is None:
-            self.node.get_logger().error("Cannot show robot config: view is not initialized")
-            return
-            
-        try:
-            self.dialog_active = True
-            self.node.get_logger().info("Opening robot configuration dialog")
-            self.view.switch_to_robot_config()
-            self.node.get_logger().info("Robot configuration dialog opened")
-        except Exception as e:
-            self.dialog_active = False
-            self.node.get_logger().error(f"Error opening robot config dialog: {str(e)}")
-            traceback.print_exc()
             
     def on_dialog_accepted(self):
         """Manejador general para la aceptación del diálogo.
@@ -268,308 +243,6 @@ class MainController():
             self.node.get_logger().error(f"Error handling dialog acceptance: {str(e)}")
             traceback.print_exc()
             
-    def on_ptu_dialog_accepted(self):
-        """
-        Maneja la aceptación del diálogo de configuración PTU.
-
-        Este método realiza las siguientes acciones:
-            - Desactiva el indicador de actividad del diálogo.
-            - Informa mediante el logger que se ha aceptado la configuración PTU.
-            - Si existe el widget de configuración PTU y contiene una posición, actualiza la posición del PTU.
-            - Emite una advertencia si el widget de configuración PTU no está disponible para recuperar los datos finales.
-
-        En caso de ocurrir una excepción, se captura y se registra el error,
-        imprimiendo además la traza para facilitar la depuración.
-        """
-        try:
-            self.dialog_active = False
-            self.node.get_logger().info("PTU configuration accepted")
-            # Process any final PTU configuration data if needed
-            if hasattr(self.view, 'ptu_config_widget') and self.view.ptu_config_widget is not None:
-                position = self.view.ptu_config_widget.PTU_coordinates
-                if position:
-                    self._update_ptu_position(position)
-            else:
-                self.node.get_logger().warn("PTU config widget not available for final data retrieval")
-        except Exception as e:
-            self.node.get_logger().error(f"Error handling PTU dialog acceptance: {str(e)}")
-            traceback.print_exc()
-            
-    def on_ptu_dialog_rejected(self):
-        """
-        Gestiona el rechazo del diálogo de configuración PTU.
-
-        Realiza las siguientes acciones:
-            - Marca el diálogo como inactivo.
-            - Registra la cancelación en el logger del nodo.
-            - En caso de error, captura la excepción, registra el fallo
-              y muestra la traza del error.
-
-        No retorna ningún valor.
-        """
-        try:
-            self.dialog_active = False
-            self.node.get_logger().info("PTU configuration cancelled")
-            # Additional cleanup if needed
-        except Exception as e:
-            self.node.get_logger().error(f"Error handling PTU dialog rejection: {str(e)}")
-            traceback.print_exc()
-            
-    def on_robot_dialog_accepted(self):
-        """
-        Gestiona la aceptación del diálogo de configuración del robot.
-
-        Desactiva el estado activo del diálogo y registra la aceptación en el
-        logger del nodo. 
-        
-        Si se dispone del widget de configuración del robot,
-        se extrae el valor de la velocidad y se actualiza la configuración
-        correspondiente. 
-        
-        En caso de que el widget no esté disponible, se
-        registra una advertencia. Si ocurre cualquier excepción durante el
-        proceso, se captura y se registra el error, mostrando además la traza
-        para facilitar la depuración.
-        """
-        try:
-            self.dialog_active = False
-            self.node.get_logger().info("Robot configuration accepted")
-            # Process any final robot configuration data if needed
-            if hasattr(self.view, 'robot_config_widget') and self.view.robot_config_widget is not None:
-                # Update robot with final configuration values
-                speed = self.view.robot_config_widget.speed
-                if speed:
-                    self._update_robot_speed(speed)
-            else:
-                self.node.get_logger().warn("Robot config widget not available for final data retrieval")
-        except Exception as e:
-            self.node.get_logger().error(f"Error handling robot dialog acceptance: {str(e)}")
-            traceback.print_exc()
-            
-    def on_robot_dialog_rejected(self):
-        """
-        Maneja el rechazo del diálogo de configuración del robot.
-
-        Esta función marca el diálogo como inactivo y registra un mensaje
-        informativo indicando que la configuración del robot ha sido
-        cancelada. Adicionalmente, se pueden realizar tareas de limpieza
-        si es necesario. En caso de ocurrir alguna excepción, el error se
-        registra detalladamente.
-
-        Raises:
-            Exception: Captura cualquier excepción que se genere durante
-            el manejo del rechazo del diálogo.
-        """
-        try:
-            self.dialog_active = False
-            self.node.get_logger().info("Robot configuration cancelled")
-            # Additional cleanup if needed
-        except Exception as e:
-            self.node.get_logger().error(f"Error handling robot dialog rejection: {str(e)}")
-            traceback.print_exc()
-    
-    def _update_ptu_position(self, position: Tuple[int, int]):
-        """
-        Actualiza la posición del PTU y la interfaz de usuario asociada.
-
-        Parameters:
-            position (Tuple[int,int]): Coordenadas (x, y) de la posición del PTU. Se espera
-                que sea una tupla o lista con dos elementos. Si es None, se emite
-                una advertencia y no se realiza la actualización.
-                
-        Proceso:
-            1. Valida que position no sea None.
-            2. Actualiza la posición interna del PTU y registra la operación.
-            3. Verifica la disponibilidad de los componentes de la interfaz:
-               a. Si la vista y el mapa están disponibles, dibuja el marcador del
-                  PTU en el mapa.
-               b. De lo contrario, registra una advertencia.
-            4. Ejecuta comprobaciones adicionales mediante check_publish y
-               check_PTU_ready.
-            5. Captura y registra cualquier excepción que se produzca durante el
-               proceso, imprimiendo la traza del error.
-        """
-        if position is None:
-            self.node.get_logger().warn("Received null position for PTU")
-            return
-            
-        try:
-            self.PTU_position = position
-            self.node.get_logger().info(f"PTU position updated: {position}")
-            
-            # Check if view and components are available
-            if (self.view is not None and 
-                hasattr(self.view, 'home_tab') and 
-                self.view.home_tab is not None and
-                hasattr(self.view.home_tab, 'map_frame')):
-                
-                self.view.home_tab.map_frame.drawPTUMarker(position[0], position[1])
-                if self.robot_position is None:
-                    self.view.home_tab.map_frame.centerMap(position[0], position[1])
-            else:
-                self.node.get_logger().warn("Could not update map: UI components not available")
-
-            self.check_publish()    
-            self.check_PTU_ready()
-        except Exception as e:
-            self.node.get_logger().error(f"Error updating PTU position: {str(e)}")
-            traceback.print_exc()
-
-    def _update_robot_speed(self, speed : float):
-        """
-        Actualiza la velocidad del robot.
-
-        Este método asigna el valor de `speed` a la variable
-        `robot_speed` y registra la acción. Si ocurre alguna
-        excepción durante la actualización, se captura, se
-        registra el error y se imprime la traza de la excepción.
-
-        Parameters:
-            speed (float): Valor numérico que indica la nueva velocidad del
-                   robot.
-        """
-        """Update robot speed with error handling"""
-        try:
-            self.robot_speed = speed
-            self.node.get_logger().info(f"Robot speed updated: {speed}")
-            self.check_Robot_ready()
-        except Exception as e:
-            self.node.get_logger().error(f"Error updating robot speed: {str(e)}")
-            traceback.print_exc()
-
-    def update_PTU_ready(self, PTU_ready : bool):
-        """
-        Actualiza el estado de disponibilidad del PTU.
-        Este método realiza lo siguiente:
-            - Verifica si el valor de PTU_ready es nulo; en ese caso, registra una advertencia
-              y detiene la actualización.
-            - Si PTU_ready tiene un valor válido, actualiza el estado y registra la
-              actualización.
-            - Llama al método check_PTU_ready para continuar con la verificación de
-              la disponibilidad.
-            - Si ocurre cualquier excepción durante la actualización, se registra un
-              error y se imprime el traceback para facilitar el debug.
-        Parameters:
-            PTU_ready (bool): Estado que indica si el PTU está listo.
-        """
-        try:
-            if PTU_ready is None:
-                self.node.get_logger().warn("Received null PTU_ready status")
-                return
-            
-            self.node.get_logger().info(f"PTU ready status updated: {PTU_ready}")
-            self.PTU_ready = PTU_ready
-            self.check_PTU_ready()
-        except Exception as e:
-            self.node.get_logger().error(f"Error updating PTU ready status: {str(e)}")
-            traceback.print_exc()
-
-    def update_TDLAS_ready(self, TDLAS_ready : bool):
-        """
-        Actualiza el estado de 'TDLAS_ready' con manejo
-        de errores.
-
-        Si 'TDLAS_ready' es None, se registra una advertencia y
-        se termina la función. En otro caso, se actualiza el
-        estado y se llama a 'check_TDLAS_ready' para verificar
-        la actualización.
-
-        Parameters:
-            TDLAS_ready (bool): Indicador del estado de
-            disponibilidad de TDLAS.
-        Raises:
-            Exception: Se captura y registra cualquier error
-            durante la actualización, mostrando la traza.
-        """
-        try:
-            if TDLAS_ready is None:
-                self.node.get_logger().warn("Received null TDLAS_ready status")
-                return
-            
-            self.node.get_logger().info(f"PTU ready status updated: {TDLAS_ready}")
-            self.TDLAS_ready = TDLAS_ready
-            self.check_TDLAS_ready()
-        except Exception as e:
-            self.node.get_logger().error(f"Error updating PTU ready status: {str(e)}")
-            traceback.print_exc()
-
-    def update_hunter_position(self, position : dict):
-        """
-        Actualiza la posición de Hunter y la interfaz de usuario.
-
-        Esta función recibe un diccionario con la posición del robot y
-        actualiza la posición interna. Se comprueba si el diccionario es
-        válido y, en caso de serlo, se actualiza la posición del robot.
-        Si la interfaz de usuario y sus componentes están disponibles,
-        también se actualizan los widgets correspondientes. Además, se
-        verifica el estado de configuración del robot.
-
-        Parameters:
-            position (dict): Diccionario que contiene la posición del 
-            robot. Se esperan los valores necesarios para actualizar la
-            ubicación.
-        
-        Raises:
-            Se captura cualquier excepción que se
-            produzca durante la actualización, registrando la causa
-            y mostrando la traza de error.
-        """
-        try:
-            if not position:
-                self.node.get_logger().warn("Received null hunter position")
-                return
-                
-            self.robot_position = position
-            self.node.get_logger().info(f"Posición de Hunter actualizada: {position}")
-            
-            # Check if view and components are available before updating UI
-            if (self.view is not None and 
-                hasattr(self.view, 'home_tab') and 
-                self.view.home_tab is not None and
-                hasattr(self.view.home_tab, 'map_frame')):
-                
-                self.view.home_tab.set_robot_position(position)
-                if self.PTU_position is None:
-                    self.view.home_tab.map_frame.centerMap(position["lat"], position["lng"])
-                self.view.robot_config_widget.set_position(position)
-            else:
-                self.node.get_logger().warn("Could not update map: UI components not available")
-            
-            # Update robot ready status
-            if not self.robot_configured:
-                self.check_Robot_ready()
-        except Exception as e:
-            self.node.get_logger().error(f"Error updating hunter position: {str(e)}")
-            traceback.print_exc()
-
-    def _update_path(self, path : list):
-        """
-        Actualiza la ruta y verifica el estado del robot.
-
-        Si la ruta es None, se emite una advertencia y no se realiza
-        ninguna actualización. En caso contrario, se actualiza la
-        ruta del objeto y se registra la acción, seguido de la
-        verificación del estado del robot.
-
-        Parámetros:
-            path (list): Nueva ruta que se debe establecer. Puede ser None.
-
-        Excepciones:
-            Captura cualquier excepción durante la actualización, 
-            registra el error y muestra el traceback.
-        """
-        try:
-            if path is None:
-                self.node.get_logger().warn("Received null path")
-                return
-                
-            self.path = path
-            self.node.get_logger().info(f"Ruta actualizada: {path}")
-            self.check_Robot_ready()
-        except Exception as e:
-            self.node.get_logger().error(f"Error updating path: {str(e)}")
-            traceback.print_exc()
-    
     def update_TDLAS_data(self, data : dict):
         """
         Actualiza los datos TDLAS con manejo de errores.
@@ -606,8 +279,8 @@ class MainController():
             msg = ROSString()
             msg.data = json.dumps({
                 "tdlas_data": data,
-                "ptu_position": self.PTU_position,
-                "hunter_position": self.robot_position
+                "ptu_position": self.ptu_controller.PTU_position,
+                "hunter_position": self.robot_controller.robot_position
             })
             self.node.publisher_play_simulation.publish(msg)
                 
@@ -616,7 +289,7 @@ class MainController():
                 hasattr(self.view, 'home_tab') and 
                 self.view.home_tab is not None):
 
-                positions = [(self.PTU_position[0], self.PTU_position[1]), (self.robot_position['lat'], self.robot_position['lng'])]
+                positions = [(self.ptu_controller.PTU_position[0], self.ptu_controller.PTU_position[1]), (self.robot_controller.robot_position['lat'], self.robot_controller.robot_position['lng'])]
                 opacity = 0.9 * (data.get('average_ppmxm', 0) / 150.0) + 0.1
                 
                 self.view.home_tab.map_frame.drawBeam(positions, opacity)
@@ -624,188 +297,8 @@ class MainController():
                 self.node.get_logger().warn("Could not update TDLAS data: UI components not available")
         except Exception as e:
             self.node.get_logger().error(f"Error updating TDLAS data: {str(e)}")
-            traceback.print_exc
-
-    def check_TDLAS_ready(self):
-        """
-        Verifica la disponibilidad del TDLAS y actualiza el estado del dispositivo en la interfaz de usuario.
-        
-        Este método realiza las siguientes acciones:
-            - Registra el estado actual de TDLAS usando el logger asociado al nodo.
-            - Comprueba si la vista ('view') está inicializada; en caso contrario, registra un error.
-            - Verifica que exista y esté asignada la pestaña 'home_tab' en la vista.
-            - Si TDLAS está listo y la pestaña existe, actualiza el estado del dispositivo TDLAS en la interfaz
-              y llama a check_all_ready() para verificar el estado general.
-
-        Manejo de errores:
-            - Se capturan y registran todas las excepciones que se puedan generar durante la ejecución del método.
-        """
-        try:
-            self.node.get_logger().info(f"Ha llegado: {self.TDLAS_ready}")
-
-            # Check if view and UI components are available
-            if self.view is None:
-                self.node.get_logger().error("Cannot check TDLAS ready: view is not initialized")
-                return
-            has_home_tab = (hasattr(self.view, 'home_tab') and
-                                    self.view.home_tab is not None)
-            
-            # Update TDLAS status based on current state
-            if self.TDLAS_ready:
-                if has_home_tab:
-                    self.view.home_tab.set_device_status("TDLAS", True)
-                    self.check_all_ready()
-        except Exception as e:
-            self.node.get_logger().error(f"Error checking TDLAS ready: {str(e)}")
             traceback.print_exc()
         
-    def check_PTU_ready(self):
-        """
-        Verifica el estado de preparación del PTU (Unidad de Pan-Tilt) mediante la comprobación
-        de la disponibilidad de los componentes de la interfaz de usuario y actualiza el estado
-        del dispositivo según la información obtenida.
-        
-        Pasos del método:
-            1. Registra información preliminar sobre el estado actual del PTU y su posición.
-            2. Verifica que la vista (UI) esté inicializada. Si no lo está, registra un error y
-               termina el proceso.
-            3. Comprueba si existen los componentes:
-                 - La pestaña 'home_tab' destinada a mostrar el inicio.
-                 - El widget 'ptu_config_widget' encargado de representar la configuración
-                   de la PTU.
-            4. Actualiza el estado del PTU en función de la disponibilidad de su posición
-               y del valor de PTU_ready:
-                 - Si la posición está definida y PTU está listo:
-                     a. Registra la nueva posición.
-                     b. Marca el PTU como configurado.
-                     c. Actualiza el estado en la pestaña y elimina cualquier aviso de error.
-                     d. Invoca 'check_all_ready' para verificar la preparación global.
-                 - Si sólo la posición está disponible pero PTU aún no está listo:
-                     a. Marca el PTU como no configurado.
-                     b. Actualiza la pestaña para indicar que falta la confirmación.
-                     c. Notifica a través del widget que la posición no ha sido confirmada.
-                 - Si la posición no está disponible:
-                     a. Registra que el PTU no se encuentra configurado.
-                     b. Actualiza la pestaña y el widget para señalar la ausencia de la posición.
-            5. Captura y registra cualquier excepción que ocurra durante la ejecución.
-
-        Este método no retorna ningún valor, pero actualiza
-        el estado interno del controlador y la interfaz de usuario según las condiciones evaluadas.
-        """
-        try:
-            self.node.get_logger().info(f"Ha llegado: {self.PTU_ready} {self.PTU_position}")
-            
-            # Check if view and UI components are available
-            if self.view is None:
-                self.node.get_logger().error("Cannot check PTU ready: view is not initialized")
-                return
-                
-            has_home_tab = (hasattr(self.view, 'home_tab') and 
-                                   self.view.home_tab is not None)
-            has_ptu_config_widget = (hasattr(self.view, 'ptu_config_widget') and 
-                                    self.view.ptu_config_widget is not None)
-            
-            # Update PTU status based on current state
-            if(self.PTU_position is not None and self.PTU_ready):
-                self.node.get_logger().info(f"Posición de PTU actualizada: {self.PTU_position}")
-                self.ptu_configured = True
-                
-                if has_home_tab:
-                    self.view.home_tab.set_device_status("PTU", True)
-                    self.check_all_ready()
-                if has_ptu_config_widget:
-                    self.view.ptu_config_widget.set_state("Operativo")
-            elif (self.PTU_position is not None):
-                self.ptu_configured = False
-                
-                if has_home_tab:
-                    self.view.home_tab.set_device_status("PTU", False, ["Confirmación"])
-                if has_ptu_config_widget:
-                    self.view.ptu_config_widget.set_state("No se ha confirmado la posición")
-                
-            else:
-                self.node.get_logger().info("PTU no configurado")
-                self.ptu_configured = False
-                
-                if has_home_tab:
-                    self.view.home_tab.set_device_status("PTU", False, ["Posición"])
-                if has_ptu_config_widget:
-                    self.view.ptu_config_widget.set_state("No se ha configurado la posición")
-        except Exception as e:
-            self.node.get_logger().error(f"Error checking PTU ready: {str(e)}")
-            traceback.print_exc()
-
-    def check_Robot_ready(self):
-        """
-        Verifica que el robot esté listo comprobando la disponibilidad
-        de los widgets requeridos y la validez de la configuración del robot,
-        incluyendo velocidad, posición y trayectoria.
-
-        Detalles:
-            - Registra información básica sobre velocidad, posición y trayectoria.
-            - Comprueba que la vista (view) esté inicializada; en caso contrario, registra un error.
-            - Verifica la existencia y disponibilidad de 'home_tab' en la vista.
-            - Evalúa si 'robot_speed' es válida (mayor a 0).
-            - Evalúa que 'robot_position' no sea nula.
-            - Evalúa que 'path' contenga datos válidos (lista no vacía).
-            - Actualiza el estado de configuración del robot ('robot_configured') basado en la presencia
-              de todos los parámetros requeridos.
-            - Dependiendo de los parámetros verificados, actualiza el estado del dispositivo en el widget
-              'home_tab', indicando si el robot está listo o qué parámetros faltan.
-            - Si está disponible, actualiza el widget 'robot_config_widget' mostrando el estado operativo
-              o los elementos faltantes necesarios.
-            - En caso de cualquier excepción, captura el error e imprime el traceback correspondiente en el log.
-        """
-        try:
-            self.node.get_logger().info(f"Ha llegado: {self.robot_speed} {self.robot_position} {self.path}")
-            
-            # Check if view is available
-            if self.view is None:
-                self.node.get_logger().error("Cannot check Robot ready: view is not initialized")
-                return
-                
-            # Check if home_tab is available
-            has_home_tab = (hasattr(self.view, 'home_tab') and 
-                                   self.view.home_tab is not None)
-            if not has_home_tab:
-                self.node.get_logger().error("Cannot check Robot ready: home_tab is not available")
-                return
-                
-            missing = []
-            
-            if not self.robot_speed or self.robot_speed <= 0:
-                missing.append("Velocidad")
-            
-            if self.robot_position is None:
-                missing.append("Posición")
-            
-            if not self.path or len(self.path) == 0:
-                missing.append("Trayectoria")
-            
-            # Update robot configuration status
-            self.robot_configured = len(missing) == 0
-            
-            # Update UI status
-            if not missing:
-                self.view.home_tab.set_device_status("Robot", True)
-                self.check_publish()
-                self.check_all_ready()
-            else:
-                self.view.home_tab.set_device_status("Robot", False, missing)
-                
-            # Update robot config widget if available
-            if (hasattr(self.view, 'robot_config_widget') and 
-                self.view.robot_config_widget is not None):
-                
-                if not missing:
-                    self.view.robot_config_widget.set_state("Operativo")
-                else:
-                    missing_str = ", ".join(missing)
-                    self.view.robot_config_widget.set_state(f"Falta: {missing_str}")
-        except Exception as e:
-            self.node.get_logger().error(f"Error checking Robot ready: {str(e)}")
-            traceback.print_exc()
-
     def check_all_ready(self):
         """
         Verifica que todos los dispositivos y componentes necesarios estén listos.
@@ -823,7 +316,7 @@ class MainController():
         De cumplirse, se indica en la pestaña que el sistema está listo y se habilita el botón de inicio.
         En caso de cualquier excepción durante el proceso, se registra el error y se imprime el traceback.
         """
-        ready = (self.ptu_configured and self.robot_configured and self.TDLAS_ready)
+        ready = (self.ptu_controller.ptu_configured and self.robot_controller.robot_configured and self.tdlas_controller.TDLAS_ready)
         try:
             self.node.get_logger().info(f"Todo listo: {ready}")
             if ready:
@@ -839,7 +332,7 @@ class MainController():
                 # Update UI status
                 if has_home_tab:
                     self.view.home_tab.set_ready(True)
-                    self.view.home_tab.enableStartButton(self.test_start)
+                    self.view.home_tab.enableStartButtonCallback(self.test_start)
         except Exception as e:
             self.node.get_logger().error(f"Error checking all ready: {str(e)}")
             traceback.print_exc()
@@ -861,14 +354,14 @@ class MainController():
               en el log, mostrando además la traza de la excepción.
         """
         try:
-            if self.PTU_position and len(self.path) > 0 and self.robot_speed > 0:
+            if self.ptu_controller.PTU_position and len(self.robot_controller.path) > 0 and self.robot_controller.robot_speed > 0:
                 self.node.get_logger().info("Listo para publicar")
 
                 # Publish /initialize_hunter_params
                 info = {
-                    "vel": self.robot_speed, 
-                    "point_ptu": {"latitude_ptu": self.PTU_position[0], 
-                                  "longitude_ptu": self.PTU_position[1]},
+                    "vel": self.robot_controller.robot_speed, 
+                    "point_ptu": {"latitude_ptu": self.ptu_controller.PTU_position[0], 
+                                  "longitude_ptu": self.ptu_controller.PTU_position[1]},
                     "points": self.path
                 }
                 json_info = json.dumps(info)
@@ -886,7 +379,7 @@ class MainController():
         self.process, _ = self._record_ros2_bag(self.node.get_parameter("TOPICS.save_simulation").
                                                 value)
         msg = ROSString()
-        msg.data = json.dumps({"path": self.path, "speed": self.robot_speed})
+        msg.data = json.dumps({"path": self.robot_controller.path, "speed": self.robot_controller.robot_speed})
         self.node.publisher_start_simulation.publish(msg)
 
     def _record_ros2_bag(self, topic="/TDLAS_data"):
@@ -910,6 +403,7 @@ class MainController():
                 self.process.terminate()
                 self.process.wait()
                 self.node.get_logger().info("Test finished successfully")
+                self.view.home_tab.enableStartButton()
             else:
                 self.node.get_logger().warn("No process to terminate")
         except Exception as e:
@@ -943,9 +437,9 @@ class MainController():
                 self.view.simulation_tab.save_positions.append({"lat": positions[1][0], "lng": positions[1][1]})
 
                 current_ptu = positions[0]
-                if current_ptu != self.last_ptu_position:
+                if current_ptu != self.ptu_controller.last_ptu_position:
                     self.view.simulation_tab.map_frame.drawPTUMarker(current_ptu[0], current_ptu[1])
-                    self.last_ptu_position = current_ptu
+                    self.ptu_controller.last_ptu_position = current_ptu
             else:
                 self.node.get_logger().warn("Could not update TDLAS data: UI components not available")
         except Exception as e:

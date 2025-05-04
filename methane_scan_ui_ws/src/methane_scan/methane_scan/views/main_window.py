@@ -17,6 +17,7 @@ from methane_scan.views.components.title_bar import TitleBar # type: ignore
 from methane_scan.views.pages.home_page import HomePage # type: ignore
 from methane_scan.views.pages.simulation_page import SimulationPage # type: ignore
 from methane_scan.views.pages.robot_config import RobotConfigWidget # type: ignore
+from methane_scan.views.pages.select_location_dialog import TrajectorySelectorDialog # type: ignore
 import methane_scan.qresources_rc  # type: ignore # Tu archivo de recursos compilado
 
 config_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)))
@@ -74,7 +75,7 @@ class MainWindow(QMainWindow):
         # Construimos un QTabWidget para manejar el cambio de pantalla según lo indique la title bar
         self.tab_widget = QStackedWidget()
         # Agregamos la pantalla principal (HomePage) como la primera pestaña
-        self.home_tab = HomePage(API_KEY)
+        self.home_tab = HomePage(API_KEY, self)
         self.tab_widget.addWidget(self.home_tab)
         # Agregamos la pestaña de simulación (SimulationPage) como la segunda pestaña
         self.simulation_tab = SimulationPage(API_KEY)
@@ -96,6 +97,21 @@ class MainWindow(QMainWindow):
         # Connect dialog signals
         self.ptu_config_widget.accepted.connect(self.ptu_config_dialog.accept)
         self.ptu_config_widget.rejected.connect(self.ptu_config_dialog.reject)
+
+        #Creamos los diálogos de selección de trayectoria como QDialog
+        self.select_trajectory_dialog = QDialog(self)
+        self.select_trajectory_dialog.setWindowTitle("Seleccionar trayectoria")
+        select_trajectory_layout = QVBoxLayout(self.select_trajectory_dialog)
+        select_trajectory_layout.setSizeConstraint(QVBoxLayout.SetFixedSize)
+        self.select_trajectory_widget = TrajectorySelectorDialog(parent=self)
+        self.select_trajectory_widget.setMinimumSize(800, 500)
+        select_trajectory_layout.addWidget(self.select_trajectory_widget)
+        self.select_trajectory_dialog.setModal(True)
+
+        # Connect dialog signals
+        self.select_trajectory_widget.accepted.connect(self.select_trajectory_dialog.accept)
+        self.select_trajectory_widget.rejected.connect(self.select_trajectory_dialog.reject)
+        self.select_trajectory_widget.select_trajectory_signal.connect(self.home_tab.selectTrajectory)
         
         # Diálogo de configuración del robot
         self.robot_config_dialog = QDialog(self)
@@ -141,6 +157,9 @@ class MainWindow(QMainWindow):
     def register_robot_config_callback(self, callback):
         self.home_tab.register_robot_config_callback(callback)
 
+    def register_select_trajectory_callback(self, callback):
+        self.home_tab.register_trajectory_callback(callback)
+
     def register_home_callback(self, callback):
         self.titleBar.register_home_callback(callback)
         
@@ -159,6 +178,12 @@ class MainWindow(QMainWindow):
         # Ensure the dialog adjusts to content before showing
         self.robot_config_dialog.adjustSize()
         self.robot_config_dialog.exec_()
+
+    def switch_to_select_trajectory(self):
+        # Show Select trajectory dialog
+        # Ensure the dialog adjusts to content before showing
+        self.select_trajectory_dialog.adjustSize()
+        self.select_trajectory_dialog.exec_()
         
     def switch_to_home(self):
         # Close any open dialogs
