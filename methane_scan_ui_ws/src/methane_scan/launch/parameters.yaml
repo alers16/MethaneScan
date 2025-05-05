@@ -10,5 +10,6 @@ methane_scan_node:
       end_simulation: /end_simulation
       save_simulation: /save_simulation
       play_simulation: /data_playback
+      start_stop_hunter: /start_stop_value
 
 

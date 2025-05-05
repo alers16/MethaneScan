@@ -3,9 +3,10 @@ from PyQt5.QtWidgets import (
     QScrollArea, QPushButton, QFrame, QSizePolicy, QToolButton,
     QMainWindow, QApplication, QInputDialog, QLineEdit
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QEventLoop
+from PyQt5.QtCore import Qt, pyqtSignal, QEventLoop, QEvent
 from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtGui import QPainter, QColor
+from PyQt5.QtGui import QMouseEvent
 
 import requests
 import os
@@ -28,11 +29,47 @@ class TrajectorySelectorDialog(QWidget):
         self.parent = parent
         if parent and hasattr(parent, 'styleSheet'):
             self.setStyleSheet(parent.styleSheet())
+
+        self.setStyleSheet("""
+            *:focus {
+                border: 2px solid #009688;  /* teal para buen contraste */
+                border-radius: 4px;
+           }
+        """)
         # Cargar entradas guardadas
         self.trajectories = self.load_all_map_previews()
         self.selected_trajectory = None
 
         self._build_ui()
+
+        self.installEventFilter(self)
+    
+    def eventFilter(self, obj, event):
+        # Si pulsas Return o Enter
+        if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            w = self.focusWidget()
+            if isinstance(w, QPushButton) and w.isEnabled():
+                w.click()
+                return True    # consumimos el evento
+            if isinstance(w, QLineEdit):
+                # Si es un QLineEdit, lo ignoramos
+                return False
+            if isinstance(w, QFrame):
+                # dentro de eventFilter, en el caso de una card:
+                pos = w.rect().center()
+                release_event = QMouseEvent(
+                    QEvent.MouseButtonRelease,
+                    pos,
+                    Qt.LeftButton,
+                    Qt.LeftButton,
+                    Qt.NoModifier
+                )
+                w.mouseReleaseEvent(release_event)
+                return True
+            if isinstance(w, QToolButton):
+                w.click()
+                return True
+        return super().eventFilter(obj, event)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -47,8 +84,11 @@ class TrajectorySelectorDialog(QWidget):
 
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
+        scroll.setFocusPolicy(Qt.NoFocus)
+        scroll.viewport().setFocusPolicy(Qt.NoFocus)
         # Mantener estilo coherente dentro del scroll
         content = QWidget()
+        content.setFocusPolicy(Qt.NoFocus)
         content.setStyleSheet("background-color: transparent;")
         self.cards_layout = QVBoxLayout(content)
         self.cards_layout.setContentsMargins(0, 0, 0, 0)
@@ -57,20 +97,20 @@ class TrajectorySelectorDialog(QWidget):
         scroll.setWidget(content)
         layout.addWidget(scroll)
 
-        self.refresh_trajectories()
-
-        btn_add = QPushButton("Añadir nueva trayectoria")
-        btn_add.clicked.connect(self.select_area)
+        self.btn_add = QPushButton("Añadir nueva trayectoria")
+        self.btn_add.clicked.connect(self.select_area)
         self.btn_select = QPushButton("Seleccionar trayectoria")
         self.btn_select.setEnabled(False)
         self.btn_select.clicked.connect(self.select_trajectory)
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        btn_layout.addWidget(btn_add)
+        btn_layout.addWidget(self.btn_add)
         btn_layout.addWidget(self.btn_select)
 
         layout.addLayout(btn_layout)
+
+        self.refresh_trajectories()
 
         self.setMinimumSize(600, 400)
 
@@ -82,9 +122,10 @@ class TrajectorySelectorDialog(QWidget):
         """
         # Subclase de QToolButton para manejar enter/leave y deshabilitar el hover del frame
         class HoverToggleButton(QToolButton):
-            def __init__(self, parent_frame, *args, **kwargs):
+            def __init__(self, parent_frame, name, *args, **kwargs):
                 super().__init__(*args, **kwargs)
                 self.frame = parent_frame
+                self.setObjectName(name)
 
             def enterEvent(self, event):
                 # Desactiva hover del frame
@@ -119,9 +160,19 @@ class TrajectorySelectorDialog(QWidget):
             QFrame#cardFrame[selected="true"] {
                 background-color: #606060;
                 border: 1px solid #888888;
-            }                
+            }
+            /* Cuando el propio frame tenga el foco */
+            QFrame#cardFrame:focus {
+                border: 2px solid #009688;
+                border-radius: 8px;   /* mantén el mismo radio que el normal */
+            }
+            QToolButton:focus {
+                border: 2px solid #009688;
+                border-radius: 8px;
+            }                        
         """)
         frame.setCursor(Qt.PointingHandCursor)
+        frame.setFocusPolicy(Qt.StrongFocus)
         v_layout = QVBoxLayout(frame)
         v_layout.setContentsMargins(12, 12, 12, 12)
         v_layout.setSpacing(8)
@@ -164,7 +215,7 @@ class TrajectorySelectorDialog(QWidget):
         h_layout.addLayout(text_layout)
         h_layout.addStretch()
 
-        delete_btn = QPushButton()
+        delete_btn = HoverToggleButton(frame, "delete_btn")
         delete_icon = QIcon(":/icon_DeteleTraj.svg").pixmap(24, 24)
         white_delete = QPixmap(24, 24)
         white_delete.fill(Qt.transparent)
@@ -176,7 +227,17 @@ class TrajectorySelectorDialog(QWidget):
         painter_delete.end()
         delete_btn.setIcon(QIcon(white_delete))
         delete_btn.setFixedSize(24, 24)
-        delete_btn.setStyleSheet("background: transparent; border: none;")
+        delete_btn.setFocusPolicy(Qt.StrongFocus)
+        delete_btn.setStyleSheet("""
+            QToolButton {
+                background: transparent;
+                border: none;
+            }
+            QToolButton:focus {
+                border: 2px solid #009688;
+                border-radius: 8px;
+            }
+        """)
         delete_btn.setCursor(Qt.PointingHandCursor)
 
         # …
@@ -193,7 +254,7 @@ class TrajectorySelectorDialog(QWidget):
         )
         h_layout.addWidget(delete_btn)
 
-        rename_btn = QPushButton()
+        rename_btn = HoverToggleButton(self, "rename_btn")
         rename_icon = QIcon(":/icon_RenameTraj.svg").pixmap(24, 24)
         white_rename = QPixmap(24, 24)
         white_rename.fill(Qt.transparent)
@@ -205,7 +266,17 @@ class TrajectorySelectorDialog(QWidget):
         painter_rename.end()
         rename_btn.setIcon(QIcon(white_rename))
         rename_btn.setFixedSize(24, 24)
-        rename_btn.setStyleSheet("background: transparent; border: none;")
+        rename_btn.setFocusPolicy(Qt.StrongFocus)
+        rename_btn.setStyleSheet("""
+            QToolButton {
+                background: transparent;
+                border: none;
+            }
+            QToolButton:focus {
+                border: 2px solid #009688;
+                border-radius: 8px;
+            }
+        """)
         rename_btn.setCursor(Qt.PointingHandCursor)
 
         # …
@@ -216,7 +287,7 @@ class TrajectorySelectorDialog(QWidget):
         h_layout.addWidget(rename_btn)
 
         # Toggle especializado
-        toggle_btn = HoverToggleButton(frame)
+        toggle_btn = HoverToggleButton(frame, "toggle_btn")
         toggle_btn.setArrowType(Qt.DownArrow)
         toggle_btn.setCheckable(True)
         toggle_btn.setStyleSheet("""
@@ -228,6 +299,10 @@ class TrajectorySelectorDialog(QWidget):
             QToolButton:checked {
                 background-color: #606060;
                 border-radius: 4px;
+            }
+            QToolButton:focus {
+                border: 2px solid #009688;
+                border-radius: 8px;
             }
         """)
         # Alternar flecha según estado
@@ -263,7 +338,8 @@ class TrajectorySelectorDialog(QWidget):
             self.btn_select.setEnabled(True)
         )
 
-        return frame
+        
+        return frame, delete_btn, rename_btn, toggle_btn
 
     def _show_rename_dialog(self, old_name: str, title_label: QLabel):
         """Abre un QInputDialog para renombrar la trayectoria y actualiza el store."""
@@ -274,7 +350,20 @@ class TrajectorySelectorDialog(QWidget):
             QLineEdit.Normal,
             old_name
         )
+
+        new_name = new_name.strip()
         if not ok or not new_name or new_name == old_name:
+            return
+        
+        # Verificar si el nuevo nombre ya existe
+
+        if not new_name:
+            QMessageBox.warning(
+            self,
+            "Error",
+            "El nombre no puede estar vacío.",
+            QMessageBox.Ok
+            )
             return
 
         # Cargar store
@@ -283,6 +372,16 @@ class TrajectorySelectorDialog(QWidget):
                 store = pickle.load(f)
         else:
             store = {}
+
+        # Verificar si el nuevo nombre ya existe
+        if new_name in store:
+            QMessageBox.warning(
+            self,
+            "Error",
+            f"Ya existe una trayectoria con el nombre '{new_name}'.",
+            QMessageBox.Ok
+            )
+            return
 
         # Renombrar clave
         info = store.pop(old_name, None)
@@ -295,34 +394,8 @@ class TrajectorySelectorDialog(QWidget):
             pickle.dump(store, f)
 
         # Refrescar UI
-        self.refresh_trajectories()
-    
-    def _rename_trajectory(self, old_name: str, title_label: QLabel):
-        new_name, ok = QInputDialog.getText(
-            self, 
-            "Renombrar trayectoria",
-            "Nuevo nombre:",
-            text=old_name
-        )
-        if not ok or not new_name or new_name == old_name:
-            return
-
-        # actualizar store
-        if os.path.exists(DATA_STORE):
-            with open(DATA_STORE, "rb") as f:
-                store = pickle.load(f)
-        else:
-            store = {}
-        info = store.pop(old_name, None)
-        if info is None:
-            return
-
-        store[new_name] = info
-        with open(DATA_STORE, "wb") as f:
-            pickle.dump(store, f)
-
-        # actualizar UI: etiqueta y refrescar cards
         title_label.setText(new_name)
+    
 
     def select_trajectory(self):
         """
@@ -392,27 +465,47 @@ class TrajectorySelectorDialog(QWidget):
         self.rejected.emit()
 
     def refresh_trajectories(self):
-        """
-        Refresca la lista de trayectorias:
-        1) Elimina TODOS los widgets viejos del layout.
-        2) Vuelve a leer DATA_STORE y repuebla.
-        """
-        # 1) vaciar layout
+        # 1) Limpiar todo
         while self.cards_layout.count():
             item = self.cards_layout.takeAt(0)
             if widget := item.widget():
                 widget.deleteLater()
 
-        # 2) repoblar
+        # 2) Repoblar
+        self.card_widgets = []
         self.trajectories = self.load_all_map_previews()
-        if not self.trajectories:
-            empty = QLabel("No hay trayectorias guardadas.")
-            empty.setStyleSheet("font-size: 12pt; color: #888888;")
-            empty.setAlignment(Qt.AlignCenter)
-            self.cards_layout.addWidget(empty)
-        else:
-            for traj in self.trajectories:
-                self.cards_layout.addWidget(self._create_card(traj))
+
+        prev_widget = None
+        for traj in self.trajectories:
+            frame, delete_btn, rename_btn, toggle_btn = self._create_card(traj)
+            # 2.1) Hacerlos focusable
+            for w in (frame, delete_btn, rename_btn, toggle_btn):
+                w.setFocusPolicy(Qt.StrongFocus)
+
+            self.card_widgets.append((frame, delete_btn, rename_btn, toggle_btn))
+            self.cards_layout.addWidget(frame)
+
+            # 2.2) Definir tab order dentro de la card
+            self.setTabOrder(frame, delete_btn)
+            self.setTabOrder(delete_btn, rename_btn)
+            self.setTabOrder(rename_btn, toggle_btn)
+
+            # 2.3) Enlazar la última de la tarjeta anterior con el frame de la siguiente
+            if prev_widget:
+                self.setTabOrder(prev_widget, frame)
+
+            prev_widget = toggle_btn
+
+        # 3) Después de la última tarjeta, enlazar toggle->btn_add->btn_select
+        if prev_widget:
+            self.setTabOrder(prev_widget, self.btn_add)
+        self.setTabOrder(self.btn_add, self.btn_select)
+
+        # 4) Establecer foco inicial en la primera tarjeta (si existe)
+        if self.card_widgets:
+            first_frame = self.card_widgets[0][0]
+            first_frame.setFocus()
+
     def load_all_map_previews(self):
         """
         Lee todas las entradas guardadas en DATA_STORE.

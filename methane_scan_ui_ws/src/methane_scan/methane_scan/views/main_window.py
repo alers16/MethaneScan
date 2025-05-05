@@ -126,6 +126,7 @@ class MainWindow(QMainWindow):
         # Connect dialog signals
         self.robot_config_widget.accepted.connect(self.robot_config_dialog.accept)
         self.robot_config_widget.rejected.connect(self.robot_config_dialog.reject)
+        
     
     def resizeEvent(self, event):
         """Callback que se activa cada vez que la ventana cambia de tamaño."""

@@ -502,6 +502,7 @@ class SimulationPage(QWidget):
         self.btn_clean_map.setDisabled(True)
 
 
+
     def start_simulation(self):
         self._start_process()
 
@@ -530,6 +531,8 @@ class SimulationPage(QWidget):
         self.btn_next_message.setDisabled(True)
         self._is_running = False
         self.child       = None
+        self.frecuency = 1.0
+        self.frecuency_label.setText(f"Frecuencia: {(self.frecuency):.2f}")
 
     def _start_process(self):
         cmd = f"ros2 bag play {self.file_path} --remap /save_simulation:=/data_playback"

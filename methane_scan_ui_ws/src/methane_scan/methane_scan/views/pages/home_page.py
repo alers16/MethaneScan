@@ -1,14 +1,16 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QTableWidget,
-    QTableWidgetItem, QHeaderView, QSizePolicy, QGraphicsScene, QDialogButtonBox, QGroupBox, QLineEdit, QGridLayout
+    QTableWidgetItem, QHeaderView, QSizePolicy, QGraphicsScene, QDialogButtonBox, QGroupBox, QLineEdit, QGridLayout,
+    QApplication
 )
 from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QEvent, QPointF, QRectF, QUrl
 
 import pickle
 import time
 import requests
 import os
+from PyQt5.QtGui import QMouseEvent
 
 from methane_scan.views.components.map_view import SatelliteMap # type: ignore
 from methane_scan.views.components.device_card import DeviceCard # type: ignore
@@ -17,13 +19,48 @@ DATA_STORE = "map_previews.data"
 
 class HomePage(QWidget):
     path_saved = pyqtSignal(list)
+    start_stop_signal = pyqtSignal(bool)
 
     def __init__(self, API_KEY, parent=None):
         super().__init__()
         self.parent = parent
         self.setObjectName("methaneScanTab")
+        self.setStyleSheet("""
+          *:focus {
+                border: 2px solid #009688;  /* teal para buen contraste */
+                border-radius: 4px;
+           }
+        """)
         self._API_KEY = API_KEY
+        self.start_callback = None
+        self.simulation_running = True
         self._build_ui()
+
+        self.installEventFilter(self)
+    
+    def eventFilter(self, obj, event):
+        # Si pulsas Return o Enter
+        if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            w = self.focusWidget()
+            if isinstance(w, QPushButton) and w.isEnabled():
+                w.click()
+                return True    # consumimos el evento
+            if isinstance(w, QLineEdit):
+                # Si es un QLineEdit, lo ignoramos
+                return False
+            if isinstance(w, DeviceCard):
+                # dentro de eventFilter, en el caso DeviceCard:
+                pos = w.rect().center()
+                click_event = QMouseEvent(
+                    QEvent.MouseButtonPress,
+                    pos,
+                    Qt.LeftButton,
+                    Qt.LeftButton,
+                    Qt.NoModifier
+                )
+                w.mousePressEvent(click_event)
+                return True
+        return super().eventFilter(obj, event)
 
     def _build_ui(self):
         """Construye la interfaz de la primera pestaña (MethaneScan)."""
@@ -278,6 +315,11 @@ class HomePage(QWidget):
         self.btn_iniciar.setObjectName("btnIniciar") 
         self.btn_iniciar.setDisabled(True)
 
+        self.btn_pausar = QPushButton("Pausar")
+        self.btn_pausar.setObjectName("btnPausar")
+        self.btn_pausar.setDisabled(True)
+        self.btn_pausar.clicked.connect(self._on_pause_clicked)
+
         self.btn_abortar = QPushButton("Abortar")
         self.btn_abortar.setObjectName("btnAbortar")
         self.btn_abortar.setDisabled(True)
@@ -289,8 +331,27 @@ class HomePage(QWidget):
         control_layout.addWidget(self.not_ready_label)
         
         buttons_layout.addWidget(self.btn_iniciar)
+        buttons_layout.addWidget(self.btn_pausar)
         buttons_layout.addWidget(self.btn_abortar)
         control_layout.addLayout(buttons_layout)
+
+        for w in (
+            self.card_ptu, self.card_tdlas, self.card_robot,
+            self.btn_select_area, self.btn_clean_area,
+            btn_zoom_in, btn_zoom_out,
+            self.btn_iniciar, self.btn_pausar, self.btn_abortar
+        ):
+            w.setFocusPolicy(Qt.StrongFocus)
+
+        # 2) Definimos el orden de tabulación
+        self.setTabOrder(self.card_ptu,       self.card_tdlas)
+        self.setTabOrder(self.card_tdlas,     self.card_robot)
+        self.setTabOrder(self.card_robot,     self.btn_select_area)
+        self.setTabOrder(self.btn_select_area,self.btn_clean_area)
+        self.setTabOrder(self.btn_clean_area, btn_zoom_in)
+        self.setTabOrder(btn_zoom_in,         btn_zoom_out)
+        self.setTabOrder(self.btn_iniciar,    self.btn_pausar)
+        self.setTabOrder(self.btn_pausar,     self.btn_abortar)
    
     def register_ptu_config_callback(self, callback):
         """Permite registrar un callback que se ejecutará al hacer clic en la card PTU."""
@@ -430,17 +491,27 @@ class HomePage(QWidget):
             self.parent.select_trajectory_widget.refresh_trajectories()
     
     def enableStartButtonCallback(self, callback):
-        self.btn_iniciar.setDisabled(False)
-        self.btn_iniciar.clicked.connect(callback)
-        self.btn_iniciar.clicked.connect(self.disableStartButton)
+        if self.start_callback is None:
+            self.btn_iniciar.setDisabled(False)
+            self.start_callback = callback
+            self.btn_iniciar.clicked.connect(callback)
 
     def enableStartButton(self):
         self.btn_iniciar.setDisabled(False)
         self.btn_abortar.setDisabled(True)
+        self.btn_pausar.setDisabled(True)
 
     def disableStartButton(self):
         self.btn_iniciar.setDisabled(True)
+        self.btn_pausar.setDisabled(False)
         self.btn_abortar.setDisabled(False)
+
+    def tooglePauseButton(self):
+        if self.simulation_running:
+            self.btn_pausar.setText("Reanudar")
+        else:
+            self.btn_pausar.setText("Pausar")
+
     
     
     def set_device_status(self, device, status, errors = []):
@@ -465,8 +536,15 @@ class HomePage(QWidget):
         self.robot_lon_label.setText(f"Longitud: {lng}")
         self.map_frame.drawRobotMarker(lat, lng, False)
     
+
     def set_ready(self, ready):
         if ready:
             self.not_ready_label.setVisible(False)
         else:
             self.not_ready_label.setVisible(True)
+
+    def _on_pause_clicked(self):
+        self.tooglePauseButton()
+        self.start_stop_signal.emit(self.simulation_running)
+        self.simulation_running = not self.simulation_running
+        

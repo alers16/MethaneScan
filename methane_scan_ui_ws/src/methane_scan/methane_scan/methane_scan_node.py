@@ -123,6 +123,9 @@ class MethaneScanNode(Node):
             self.publisher_play_simulation = self.create_publisher(String,
                                                                     self.get_parameter('TOPICS.save_simulation').value,
                                                                     10)
+            self.publisher_start_stop_hunter = self.create_publisher(Bool,
+                                                                      self.get_parameter('TOPICS.start_stop_hunter').value,
+                                                                      10)
 
             self._initialized = True
             self.get_logger().info('MethaneScanNode initialized successfully')
@@ -141,6 +144,7 @@ class MethaneScanNode(Node):
         self.declare_parameter('TOPICS.end_simulation', "/end_simulation")
         self.declare_parameter('TOPICS.play_simulation', "/data_playback")
         self.declare_parameter('TOPICS.save_simulation', "/save_simulation")
+        self.declare_parameter('TOPICS.start_stop_hunter', "/start_stop_value")
     
     def register_callbacks(self, ptu_ready_callback, hunter_position_callback, TDLAS_ready_callback, TDLAS_data_callback,
                            end_simulation_callback, play_simulation_callback):

@@ -7,7 +7,10 @@ from methane_scan.controllers.tdlas_controller import TDLASController
 from methane_scan.controllers.ptu_controller import PTUController
 from methane_scan.views.main_window import MainWindow # type: ignore
 
+from rclpy.node import Node
+
 from std_msgs.msg import String as ROSString
+from std_msgs.msg import Bool as ROSBool
 import traceback
 from PyQt5.QtCore import pyqtSlot
 import rosbag2_py
@@ -16,7 +19,7 @@ import pexpect
 import threading
 
 class MainController():
-    def __init__(self, node):
+    def __init__(self, node: Node):
         self.node = node
         self.initialized = False
         self.widgets_connected = False
@@ -86,6 +89,7 @@ class MainController():
         self.tdlas_data_list = []
         self.process = None
         self.child = None
+        self.simulation_running = False
 
     def init_bag(self):
         """
@@ -180,6 +184,7 @@ class MainController():
                 
             if hasattr(self.view, 'home_tab') and self.view.home_tab is not None:
                 self.view.home_tab.path_saved.connect(self.robot_controller._update_path)
+                self.view.home_tab.start_stop_signal.connect(self.pause_test)
             else:
                 self.node.get_logger().warn("Methane scan tab not available for event connection")
                 
@@ -190,8 +195,6 @@ class MainController():
             
             if hasattr(self.view, 'simulation_tab') and self.view.simulation_tab is not None:
                 self.view.simulation_tab.error_signal.connect(self._show_error)
-
-            
                 
             self.widgets_connected = True
             self.node.get_logger().info("All UI events connected successfully")
@@ -293,6 +296,9 @@ class MainController():
                 opacity = 0.9 * (data.get('average_ppmxm', 0) / 150.0) + 0.1
                 
                 self.view.home_tab.map_frame.drawBeam(positions, opacity)
+                self.view.home_tab.set_tdlas_data(data)
+                self.view.home_tab.set_robot_position(self.robot_controller.robot_position)
+
             else:
                 self.node.get_logger().warn("Could not update TDLAS data: UI components not available")
         except Exception as e:
@@ -378,15 +384,33 @@ class MainController():
         self.node.get_logger().info("Botón de inicio presionado")
         self.process, _ = self._record_ros2_bag(self.node.get_parameter("TOPICS.save_simulation").
                                                 value)
+        self.simulation_running = True
+        self.view.home_tab.disableStartButton()
         msg = ROSString()
         msg.data = json.dumps({"path": self.robot_controller.path, "speed": self.robot_controller.robot_speed})
         self.node.publisher_start_simulation.publish(msg)
 
     def _record_ros2_bag(self, topic="/TDLAS_data"):
-        bag_name = "tdlas_data_bag_" + time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
+        bag_name = "experiments/tdlas_data_bag_" + time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
         command = ["ros2", "bag", "record", "-o", bag_name, topic]
         process = subprocess.Popen(command)
         return process, bag_name
+    
+    def pause_test(self, state: bool):
+        """
+        Pausa el test y cierra el proceso de grabación del bag.
+
+        Este método se encarga de pausar el proceso de grabación del bag
+        y de eliminar el bag asociado al proceso. Se utiliza el logger del
+        nodo para registrar un mensaje informativo en caso de pausa exitosa,
+        o un mensaje de error junto con el trazo de la excepción si ocurre
+        algún problema durante el proceso.
+        """
+        self.node.get_logger().info("Test paused")
+        
+        msg = ROSBool()
+        msg.data = state
+        self.node.publisher_start_stop_hunter.publish(msg)
     
     def finish_test(self):
         """
