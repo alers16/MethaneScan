@@ -23,6 +23,13 @@ class RobotConfigWidget(QWidget):
         self.parent = parent
         if parent and hasattr(parent, 'styleSheet'):
             self.setStyleSheet(parent.styleSheet())
+
+        self.setStyleSheet("""
+            *:focus {
+                border: 2px solid #009688;  /* teal para buen contraste */
+                border-radius: 4px;
+           }
+        """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._build_ui()
 

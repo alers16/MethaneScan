@@ -33,7 +33,7 @@ setup(
     entry_points={
     	'console_scripts': [
         	'methane_scan_node = methane_scan.methane_scan_node:main',
-        	'ptu_ready_publisher = methane_scan.ptu_ready_sim_node:main'
+        	'mqtt_ros_bridge_node = methane_scan.mqtt_ros_bridge_node:main',
     	],
    },
 )

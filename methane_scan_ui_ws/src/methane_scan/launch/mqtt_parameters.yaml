@@ -1,16 +1,14 @@
-methane_scan_node:
+mqtt_ros_bridge_node:
   ros_parameters:
     TOPICS:
       ptu_ready: /PTU_ready
       hunter_position: /hunter_position
       tdlas_ready: /TDLAS_ready
       tdlas_data: /TDLAS_data
+      end_simulation: /end_simulation
+      ptu_position: /PTU_position
+      mqtt2ros: /mqtt2ros
+      ros2mqtt: /ros2mqtt
       initialize_hunter: /initialize_hunter_params
       start_hunter: /start_simulation
-      end_simulation: /end_simulation
-      save_simulation: /save_simulation
-      play_simulation: /data_playback
       start_stop_hunter: /start_stop_value
-      ptu_position: /PTU_position
-
-

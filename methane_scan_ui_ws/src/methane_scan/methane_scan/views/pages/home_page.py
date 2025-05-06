@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QTableWidget,
     QTableWidgetItem, QHeaderView, QSizePolicy, QGraphicsScene, QDialogButtonBox, QGroupBox, QLineEdit, QGridLayout,
-    QApplication
+    QApplication, QStyle, QProxyStyle
 )
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QEvent, QPointF, QRectF, QUrl
@@ -338,8 +338,7 @@ class HomePage(QWidget):
         for w in (
             self.card_ptu, self.card_tdlas, self.card_robot,
             self.btn_select_area, self.btn_clean_area,
-            btn_zoom_in, btn_zoom_out,
-            self.btn_iniciar, self.btn_pausar, self.btn_abortar
+            btn_zoom_in, btn_zoom_out
         ):
             w.setFocusPolicy(Qt.StrongFocus)
 
@@ -493,18 +492,25 @@ class HomePage(QWidget):
     def enableStartButtonCallback(self, callback):
         if self.start_callback is None:
             self.btn_iniciar.setDisabled(False)
+            self.btn_iniciar.setFocusPolicy(Qt.StrongFocus)
             self.start_callback = callback
             self.btn_iniciar.clicked.connect(callback)
 
     def enableStartButton(self):
         self.btn_iniciar.setDisabled(False)
+        self.btn_iniciar.setFocusPolicy(Qt.StrongFocus)
         self.btn_abortar.setDisabled(True)
+        self.btn_abortar.setFocusPolicy(Qt.NoFocus)
         self.btn_pausar.setDisabled(True)
+        self.btn_pausar.setFocusPolicy(Qt.NoFocus)
 
     def disableStartButton(self):
         self.btn_iniciar.setDisabled(True)
+        self.btn_iniciar.setFocusPolicy(Qt.NoFocus)
         self.btn_pausar.setDisabled(False)
+        self.btn_pausar.setFocusPolicy(Qt.StrongFocus)
         self.btn_abortar.setDisabled(False)
+        self.btn_abortar.setFocusPolicy(Qt.StrongFocus)
 
     def tooglePauseButton(self):
         if self.simulation_running:

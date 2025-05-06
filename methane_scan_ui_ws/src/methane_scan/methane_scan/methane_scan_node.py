@@ -14,7 +14,6 @@ import time
 import traceback
 from typing import Optional, Dict, Any, Callable
 
-# Signal class for thread-safe communication between ROS and Qt
 class RosQtSignals(QtCore.QObject):
     ptu_ready_signal = QtCore.pyqtSignal(bool)
     hunter_position_signal = QtCore.pyqtSignal(dict)
@@ -23,6 +22,7 @@ class RosQtSignals(QtCore.QObject):
     log_message_signal = QtCore.pyqtSignal(str, str)  # level, message
     end_simulation_signal = QtCore.pyqtSignal(bool)
     play_simulation_signal = QtCore.pyqtSignal(dict)
+    ptu_position_signal = QtCore.pyqtSignal(dict)
 
 class MethaneScanNode(Node):
     """ROS2 node with thread-safety and proper resource management for MethaneScan."""
@@ -51,6 +51,7 @@ class MethaneScanNode(Node):
         self._TDLAS_ready_received = False
         self._last_TDLAS_ready = None
         self._last_TDLAS_data = None
+        self._last_ptu_position = None
         
         
         # Initialize callbacks with safe no-op functions
@@ -60,6 +61,7 @@ class MethaneScanNode(Node):
         self._callback_TDLAS_data: Optional[Callable[[Dict[str, Any]], None]] = None
         self._callback_end_simulation: Optional[Callable[[bool], None]] = None
         self._callback_play_simulation: Optional[Callable[[bool], None]] = None
+        self._callback_ptu_position: Optional[Callable[[Dict[str, Any]], None]] = None
         
         # Connect Qt signals to thread-safe handler methods
         self.signals.ptu_ready_signal.connect(self._handle_ptu_ready_qt)
@@ -69,6 +71,7 @@ class MethaneScanNode(Node):
         self.signals.TDLAS_data_signal.connect(self._handle_TDLAS_data_qt)
         self.signals.end_simulation_signal.connect(self._handle_end_simulation_qt)
         self.signals.play_simulation_signal.connect(self._handle_play_simulation_qt)
+        self.signals.ptu_position_signal.connect(self._handle_ptu_position_qt)
         
         # Create subscriptions and publishers with proper error handling
         try:
@@ -113,6 +116,13 @@ class MethaneScanNode(Node):
                 10
             )
 
+            self.subscription_ptu_position = self.create_subscription(
+                String,
+                self.get_parameter('TOPICS.ptu_position').value,
+                self._listener_ptu_position_callback_safe,
+                10
+            )
+
             self.publisher_Hunter_initialized = self.create_publisher(String, 
                                                                       self.get_parameter('TOPICS.initialize_hunter').value,
                                                                       10)
@@ -145,9 +155,10 @@ class MethaneScanNode(Node):
         self.declare_parameter('TOPICS.play_simulation', "/data_playback")
         self.declare_parameter('TOPICS.save_simulation', "/save_simulation")
         self.declare_parameter('TOPICS.start_stop_hunter', "/start_stop_value")
+        self.declare_parameter('TOPICS.ptu_position', "/PTU_position")
     
     def register_callbacks(self, ptu_ready_callback, hunter_position_callback, TDLAS_ready_callback, TDLAS_data_callback,
-                           end_simulation_callback, play_simulation_callback):
+                           end_simulation_callback, play_simulation_callback, ptu_position_callback):
         """Register callbacks with thread-safe protection."""
         with self._lock:
             self._callback_ptu_ready = ptu_ready_callback
@@ -156,6 +167,7 @@ class MethaneScanNode(Node):
             self._callback_TDLAS_data = TDLAS_data_callback
             self._callback_end_simulation = end_simulation_callback
             self._callback_play_simulation = play_simulation_callback
+            self._callback_ptu_position = ptu_position_callback
             self._callbacks_registered = True
             self.get_logger().info('Callbacks registered successfully')
             
@@ -214,7 +226,7 @@ class MethaneScanNode(Node):
                 self._hunter_position_received = True
             
             self.signals.log_message_signal.emit('info', f'Received hunter position message: {data}')
-            self.signals.hunter_position_signal.emit(data)
+            self.signals.hunter_position_signal.emit((data['lat'], data['lng']))
         except json.JSONDecodeError:
             self.signals.log_message_signal.emit('error', f'Invalid JSON in hunter position message: {msg.data}')
         except Exception as e:
@@ -274,6 +286,25 @@ class MethaneScanNode(Node):
             self.signals.log_message_signal.emit('error', f'Invalid JSON in play simulation message: {msg.data}')
         except Exception as e:
             self.signals.log_message_signal.emit('error', f'Error in play simulation callback: {str(e)}')
+            traceback.print_exc()
+
+    def _listener_ptu_position_callback_safe(self, msg):
+        """Thread-safe wrapper for PTU position message callback."""
+        if not self._node_running or not self._subscriptions_active:
+            return
+        
+        try:
+            data = json.loads(msg.data)
+            
+            with self._lock:
+                self._last_ptu_position = data
+            
+            self.signals.log_message_signal.emit('info', f'Received PTU position message: {data}')
+            self.signals.ptu_position_signal.emit(data)
+        except json.JSONDecodeError:
+            self.signals.log_message_signal.emit('error', f'Invalid JSON in PTU position message: {msg.data}')
+        except Exception as e:
+            self.signals.log_message_signal.emit('error', f'Error in PTU position callback: {str(e)}')
             traceback.print_exc()
 
     def _handle_ptu_ready_qt(self, ptu_ready):
@@ -349,6 +380,16 @@ class MethaneScanNode(Node):
             #self.get_logger().info(f'Play simulation signal received: {data}')
         except Exception as e:
             self.get_logger().error(f'Error handling play simulation in Qt thread: {str(e)}')
+            traceback.print_exc()
+    
+    def _handle_ptu_position_qt(self, data):
+        """Qt thread handler for PTU position signal."""
+        try:
+            if self._callbacks_registered and self._callback_ptu_position:
+                self._callback_ptu_position(data)
+            self.get_logger().info(f'PTU position received: {data}')
+        except Exception as e:
+            self.get_logger().error(f'Error handling PTU position in Qt thread: {str(e)}')
             traceback.print_exc()
 
     def pause_subscriptions(self):
@@ -429,7 +470,8 @@ def main(args=None):
             TDLAS_ready_callback=controller.tdlas_controller.update_TDLAS_ready,
             TDLAS_data_callback=controller.update_TDLAS_data,
             end_simulation_callback=controller.finish_test,
-            play_simulation_callback=controller.play_simulation
+            play_simulation_callback=controller.play_simulation,
+            ptu_position_callback=controller.ptu_controller.update_ptu_position
         )
         
         # Set up Qt heartbeat timer for clean shutdown and responsive UI

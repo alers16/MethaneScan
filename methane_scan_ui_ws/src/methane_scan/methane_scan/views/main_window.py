@@ -1,9 +1,7 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QTabWidget, QVBoxLayout, 
-    QHBoxLayout, QLabel, QPushButton, QFrame, QTableWidget,
-    QTableWidgetItem, QHeaderView, QSizePolicy, QToolBar, QAction, QDialog,
-    QGraphicsScene
+    QSizePolicy, QDialog
 )
 from PyQt5.QtCore import Qt, QPoint
 from PyQt5.QtGui import QIcon, QPixmap
@@ -33,6 +31,7 @@ API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 if API_KEY is None:
     print("WARNING: GOOGLE_MAPS_API_KEY not found in environment variables")
     print("Maps functionality may be limited or unavailable")
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -88,9 +87,7 @@ class MainWindow(QMainWindow):
         self.ptu_config_dialog = QDialog(self)
         self.ptu_config_dialog.setWindowTitle("Configuración PTU")
         ptu_dialog_layout = QVBoxLayout(self.ptu_config_dialog)
-        ptu_dialog_layout.setSizeConstraint(QVBoxLayout.SetFixedSize)
         self.ptu_config_widget = PTUConfigWidget(self)
-        self.ptu_config_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         ptu_dialog_layout.addWidget(self.ptu_config_widget)
         self.ptu_config_dialog.setModal(True)
         

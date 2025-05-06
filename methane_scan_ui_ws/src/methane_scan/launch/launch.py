@@ -10,5 +10,11 @@ def generate_launch_description():
             executable='methane_scan_node',
             name='methane_scan_node',
             parameters=[config_file]
+        ),
+        Node(
+            package='methane_scan',
+            executable='mqtt_ros_bridge_node',
+            name='mqtt_ros_bridge_node',
+            parameters=[config_file],
         )
     ])

@@ -18,98 +18,52 @@ class PTUConfigWidget(QWidget):
         self.parent = parent
         if parent and hasattr(parent, 'styleSheet'):
             self.setStyleSheet(parent.styleSheet())
-        self._build_ui()
         self.PTU_coordinates = None
+        self._build_ui()
 
     def _build_ui(self):
         # Layout principal
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)  # Balanced margins for better appearance
-        layout.setSpacing(15)  # Increased spacing for better visual separation
+        layout.setContentsMargins(8, 8, 8, 8)  # Balanced margins for better appearance
+        layout.setSpacing(8)
 
         # Configuración de parámetros de la PTU
         config_layout = QVBoxLayout()
-        config_layout.setContentsMargins(0, 0, 0, 20)  # Márgenes inferiores mayores
         layout.addLayout(config_layout)
 
         # Título principal
         title_label = QLabel("Configuración de la PTU")
-        title_label.setContentsMargins(0, 0, 0, 10)
+        title_label.setContentsMargins(0, 0, 0, 8)
         title_label.setStyleSheet("font-weight: bold; font-size: 22pt;")
-        title_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         config_layout.addWidget(title_label)
 
-        cards_layout = QHBoxLayout()
-        cards_layout.setAlignment(Qt.AlignLeft)
-        config_layout.addLayout(cards_layout)
-        
-
-        # ------------------ Card 1: Parámetros de Percepción ------------------
-        card1 = self._create_card(
-            title="Parámetros de Percepción",
-            body="Greyhound decisively hello cordingly wonderfully marginally for upon excluding.",
-            icon=":/icon_Perception.svg"
-        )
-        cards_layout.addWidget(card1, 1)
-
-        # ------------------ Card 2: Parámetros de Detección ------------------
-        card2 = self._create_card(
-            title="Parámetros de Detección",
-            body="Greyhound decisively hello cordingly wonderfully marginally for upon excluding.",
-            icon=":/icon_Detection.svg"
-        )
-        cards_layout.addWidget(card2, 1)
-
-        # ------------------  Estado de la PTU ------------------
-        state_layout = QVBoxLayout()
-        layout.addLayout(state_layout)
-        state_layout.setContentsMargins(0, 0, 0, 40)
-
-        state_title = QLabel("Estado de la PTU")
-        state_title.setStyleSheet("font-weight: bold; font-size: 22pt;")
-        state_title.setContentsMargins(0, 0, 0, 10)
-        state_title.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
-        state_layout.addWidget(state_title)
-
+        # Posición de la PTU
         position_group = QGroupBox("Posición")
-        position_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         position_group_layout = QGridLayout(position_group)
-        position_group_layout.setContentsMargins(10, 10, 10, 10)
-        position_group_layout.setHorizontalSpacing(10)
-        position_group_layout.setVerticalSpacing(10)
+        position_group_layout.setContentsMargins(6, 6, 6, 6)
+        position_group_layout.setHorizontalSpacing(6)
+        position_group_layout.setVerticalSpacing(6)
         position_group_layout.setAlignment(Qt.AlignLeft)
 
-        lat_label = QLabel("Latitud:")
-        lat_label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
-        lon_label = QLabel("Longitud:")
-        lon_label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
-        self.lat_edit = QLineEdit()
-        self.lat_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.lon_edit = QLineEdit()
-        self.lat_edit.setText("36.71579")
-        self.lon_edit.setText("-4.478165")
-        self.lon_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.save_button = QPushButton("Guardar Posición")
-        self.save_button.setStyleSheet("margin-top: 10px;")
-        self.save_button.setDisabled(True)
+        lat_position = self.PTU_coordinates[0] if self.PTU_coordinates else "N/A"
+        self.lat_label = QLabel(f"Latitud: {lat_position}")
+        self.lat_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.lat_label.setStyleSheet("font-size: 12pt;")
+        lon_position = self.PTU_coordinates[1] if self.PTU_coordinates else "N/A"
+        self.lon_label = QLabel(f"Longitud: {lon_position}")
+        self.lon_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.lon_label.setStyleSheet("font-size: 12pt;")
 
-        self.save_button.clicked.connect(self._save_position)
-        self.lat_edit.textChanged.connect(self._check_fields)
-        self.lon_edit.textChanged.connect(self._check_fields)    
+        position_group_layout.addWidget(self.lat_label, 0, 0)
+        position_group_layout.addWidget(self.lon_label, 1, 0)
 
-        position_group_layout.addWidget(lat_label, 0, 0)
-        position_group_layout.addWidget(self.lat_edit, 0, 1, alignment=Qt.AlignLeft)
-        position_group_layout.addWidget(lon_label, 1, 0)
-        position_group_layout.addWidget(self.lon_edit, 1, 1, alignment=Qt.AlignLeft)
-        position_group_layout.addWidget(self.save_button, 2, 0, 1, 2, alignment= Qt.AlignLeft)
-
-        state_layout.addWidget(position_group)
+        config_layout.addWidget(position_group)
 
         operative_layout = QHBoxLayout()
-        operative_layout.setContentsMargins(5, 20, 0, 0)
-        operative_layout.setSpacing(10)
+        operative_layout.setContentsMargins(4, 4, 4, 4)
+        operative_layout.setSpacing(6)
         circle_label = QLabel()
-        circle_label.setMinimumSize(40, 40)
+        circle_label.setMinimumSize(30, 30)
         circle_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         circle_label.setAlignment(Qt.AlignCenter)
         icon_pixmap = QIcon(":/icon_State.svg").pixmap(64, 64).scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -124,21 +78,12 @@ class PTUConfigWidget(QWidget):
         self.state_label.setStyleSheet("font-size: 14pt;")
         self.state_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         operative_layout.addWidget(self.state_label)
-
-        state_layout.addLayout(operative_layout)
-
-        # ------------------ Dialog buttons ------------------
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.button_box.accepted.connect(self._on_accept)
-        self.button_box.rejected.connect(self._on_reject)
-        layout.addWidget(self.button_box)
-        
-        # Set size policies for the main widget to expand properly
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        config_layout.addLayout(operative_layout)
         
         # Remove fixed constraints that would prevent proper sizing
-        self.setMinimumWidth(500)
-        self.adjustSize()
+        self.setMinimumWidth(400)
+        self.setMaximumHeight(400)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
 
 
     def _create_card(self, title, body, icon):
