@@ -14,6 +14,7 @@ from PyQt5.QtGui import QMouseEvent
 
 from methane_scan.views.components.map_view import SatelliteMap # type: ignore
 from methane_scan.views.components.device_card import DeviceCard # type: ignore
+from ..components.toast import Toast # type: ignore
 
 DATA_STORE = "map_previews.data"
 
@@ -406,7 +407,7 @@ class HomePage(QWidget):
             pass
         self.btn_select_area.clicked.connect(self.trajectory_callback)
         self.map_frame.getCorners(self.handleCorners)
-        self.btn_clean_area.setDisabled(False)
+        
 
     def get_map_preview(self, coords,
                     width=600, height=300, zoom=18):
@@ -486,8 +487,11 @@ class HomePage(QWidget):
         if corners is not None:
             self.path_saved.emit(corners)
             self.save_map_preview(time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime()), corners)
+            self.btn_clean_area.setDisabled(False)
 
             self.parent.select_trajectory_widget.refresh_trajectories()
+        else:
+            Toast("No se ha seleccionado un área.", self.parent, "warning").show()
     
     def enableStartButtonCallback(self, callback):
         if self.start_callback is None:

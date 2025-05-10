@@ -5,6 +5,7 @@ import dotenv
 import os
 import requests
 from std_msgs.msg import String as ROSString
+from ..views.components.toast import Toast
 
 class _RobotSignals(QObject):
     robotReady = pyqtSignal(bool)
@@ -39,11 +40,29 @@ class RobotController:
         """
         """Update robot speed with error handling"""
         try:
+            if self.robot_speed is not None and speed == self.robot_speed:
+                self.node.get_logger().info("No change in robot speed")
+                return
+            Toast(f"¡Posición del robot actualizada a {speed} m/s", self.view, "info", 3000).show()
             self.robot_speed = speed
+            
             self.node.get_logger().info(f"Robot speed updated: {speed}")
             self.check_Robot_ready()
+        except TypeError as e:
+            Toast("Error: la velocidad debe ser un número", self.view, "error", 3000).show()
+            self.node.get_logger().error(f"TypeError updating robot speed: {e}")
+            traceback.print_exc()
+        except ValueError as e:
+            Toast("Error: valor de velocidad fuera de rango", self.view, "error", 3000).show()
+            self.node.get_logger().error(f"ValueError updating robot speed: {e}")
+            traceback.print_exc()
+        except AttributeError as e:
+            Toast("Error interno: componente de UI no disponible", self.view, "error", 3000).show()
+            self.node.get_logger().error(f"AttributeError updating robot speed: {e}")
+            traceback.print_exc()
         except Exception as e:
-            self.node.get_logger().error(f"Error updating robot speed: {str(e)}")
+            Toast(f"Error al actualizar la velocidad del robot: {e}", self.view, "error", 3000).show()
+            self.node.get_logger().error(f"Unexpected error updating robot speed: {e}")
             traceback.print_exc()
     
     def update_hunter_position(self, position : dict):
@@ -81,6 +100,7 @@ class RobotController:
                 self.view.home_tab is not None and
                 hasattr(self.view.home_tab, 'map_frame')):
                 
+                Toast(f"¡Posición de Hunter actualizada!", self.view, "info", 3000).show()
                 self.view.home_tab.set_robot_position(position)
                 self.view.robot_config_widget.set_position(position)
             else:
@@ -89,8 +109,33 @@ class RobotController:
             # Update robot ready status
             if not self.robot_configured:
                 self.check_Robot_ready()
+        except TypeError as e:
+            Toast(
+            "Formato de posición inválido.",
+            self.view, "error", 3000
+            ).show()
+            self.node.get_logger().error(f"TypeError updating hunter position: {e}")
+            traceback.print_exc()
+        except KeyError as e:
+            Toast(
+            f"Error: falta la clave '{e.args[0]}' en la posición del robot",
+            self.view, "error", 3000
+            ).show()
+            self.node.get_logger().error(f"KeyError updating hunter position: {e}")
+            traceback.print_exc()
+        except AttributeError as e:
+            Toast(
+            "Error interno: componente de UI no disponible para actualizar la posición",
+            self.view, "error", 3000
+            ).show()
+            self.node.get_logger().error(f"AttributeError updating hunter position: {e}")
+            traceback.print_exc()
         except Exception as e:
-            self.node.get_logger().error(f"Error updating hunter position: {str(e)}")
+            Toast(
+            f"Error inesperado al actualizar la posición de Hunter",
+            self.view, "error", 3000
+            ).show()
+            self.node.get_logger().error(f"Unexpected error updating hunter position: {e}")
             traceback.print_exc()
 
     def _update_path(self, path : list):
@@ -110,15 +155,41 @@ class RobotController:
             registra el error y muestra el traceback.
         """
         try:
-            if path is None:
-                self.node.get_logger().warn("Received null path")
+            if path is None or path == []:
+                self.node.get_logger().warn("Received null/empty path")
                 return
                 
             self.path = path
+            Toast(f"¡Trayectoria actualizada!", self.view, "info", 3000).show()
             self.node.get_logger().info(f"Ruta actualizada: {path}")
             self.check_Robot_ready()
+        except TypeError as e:
+            Toast(
+            "Error: formato de trayectoria inválido",
+            self.view, "error", 3000
+            ).show()
+            self.node.get_logger().error(f"TypeError updating path: {e}")
+            traceback.print_exc()
+        except ValueError as e:
+            Toast(
+            f"Error: valor inválido en la trayectoria ",
+            self.view, "error", 3000
+            ).show()
+            self.node.get_logger().error(f"ValueError updating path: {e}")
+            traceback.print_exc()
+        except AttributeError as e:
+            Toast(
+            "Error interno: componente de UI no disponible al actualizar la trayectoria",
+            self.view, "error", 3000
+            ).show()
+            self.node.get_logger().error(f"AttributeError updating path: {e}")
+            traceback.print_exc()
         except Exception as e:
-            self.node.get_logger().error(f"Error updating path: {str(e)}")
+            Toast(
+            f"Error inesperado al actualizar la trayectoria",
+            self.view, "error", 3000
+            ).show()
+            self.node.get_logger().error(f"Unexpected error updating path: {e}")
             traceback.print_exc()
 
     def check_Robot_ready(self):

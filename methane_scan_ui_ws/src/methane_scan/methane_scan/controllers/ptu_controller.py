@@ -2,6 +2,12 @@
 from typing import Tuple
 import traceback
 from PyQt5.QtCore import pyqtSignal, QObject
+from PyQt5.QtCore import QTimer
+from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import QLabel
+
+from ..views.components.toast import Toast
 
 class _PTUSignals(QObject):
     dialogActive = pyqtSignal(bool)
@@ -22,7 +28,7 @@ class PTUController():
         self.ptu_configured = False
         self.last_ptu_position = None
 
-    def update_ptu_position(self, position: Tuple[int, int]):
+    def update_ptu_position(self, position: dict):
         """
         Actualiza la posición del PTU y la interfaz de usuario asociada.
 
@@ -48,7 +54,7 @@ class PTUController():
             return
             
         try:
-            self.PTU_position = position
+            self.PTU_position = [position['lat'], position['lng']]
             self.node.get_logger().info(f"PTU position updated: {position}")
             
             # Check if view and components are available
@@ -57,8 +63,10 @@ class PTUController():
                 self.view.home_tab is not None and
                 hasattr(self.view.home_tab, 'map_frame')):
                 
-                self.view.home_tab.map_frame.drawPTUMarker(position[0], position[1])
-                self.view.home_tab.map_frame.centerMap(position[0], position[1])
+                toast = Toast("¡Posición de la PTU Actualizada!", self.view, toast_type=Toast.INFO)
+                toast.show()
+                self.view.home_tab.map_frame.drawPTUMarker(self.PTU_position[0], self.PTU_position[1])
+                self.view.home_tab.map_frame.centerMap(self.PTU_position[0], self.PTU_position[1])
             else:
                 self.node.get_logger().warn("Could not update map: UI components not available")
 
@@ -88,8 +96,12 @@ class PTUController():
                 self.node.get_logger().warn("Received null PTU_ready status")
                 return
             
-            self.node.get_logger().info(f"PTU ready status updated: {PTU_ready}")
             self.PTU_ready = PTU_ready
+            self.node.get_logger().info(f"PTU ready status updated: {PTU_ready}")
+            # dentro de update_PTU_ready, justo después de node.get_logger().info(...)
+            # create a frameless, transient label as toast
+            toast = Toast("¡Confirmación de la PTU Recibida!", self.view, toast_type=Toast.INFO)
+            toast.show()
             self.check_PTU_ready()
         except Exception as e:
             self.node.get_logger().error(f"Error updating PTU ready status: {str(e)}")
@@ -129,7 +141,7 @@ class PTUController():
         el estado interno del controlador y la interfaz de usuario según las condiciones evaluadas.
         """
         try:
-            self.node.get_logger().info(f"Ha llegado: {self.PTU_ready} {self.PTU_position}")
+            self.node.get_logger().info(f"Ha llegado en PTU: {self.PTU_ready} {self.PTU_position}")
             
             # Check if view and UI components are available
             if self.view is None:
@@ -153,6 +165,7 @@ class PTUController():
                     self.view.ptu_config_widget.set_state("Operativo")
             elif (self.PTU_position is not None):
                 self.ptu_configured = False
+                self.node.get_logger().info("PTU solo tiene posición")
                 
                 if has_home_tab:
                     self.view.home_tab.set_device_status("PTU", False, ["Confirmación"])

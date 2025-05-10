@@ -3,6 +3,7 @@ from std_msgs.msg import String as ROSString
 from PyQt5.QtCore import pyqtSignal, QObject
 import json
 
+from ..views.components.toast import Toast
 class _TDLASSignals(QObject):
     tdlasReady = pyqtSignal(bool)
 
@@ -39,11 +40,12 @@ class TDLASController():
                 self.node.get_logger().warn("Received null TDLAS_ready status")
                 return
             
-            self.node.get_logger().info(f"PTU ready status updated: {TDLAS_ready}")
+            Toast("¡Confirmación de TDLAS recibida!", self.view, "info", 3000)
+            self.node.get_logger().info(f"TDLAS ready status updated: {TDLAS_ready}")
             self.TDLAS_ready = TDLAS_ready
             self.check_TDLAS_ready()
         except Exception as e:
-            self.node.get_logger().error(f"Error updating PTU ready status: {str(e)}")
+            self.node.get_logger().error(f"Error updating TDLAS ready status: {str(e)}")
             traceback.print_exc()
 
     def check_TDLAS_ready(self):
@@ -61,7 +63,7 @@ class TDLASController():
             - Se capturan y registran todas las excepciones que se puedan generar durante la ejecución del método.
         """
         try:
-            self.node.get_logger().info(f"Ha llegado: {self.TDLAS_ready}")
+            self.node.get_logger().info(f"Ha llegado TDLAS: {self.TDLAS_ready}")
 
             # Check if view and UI components are available
             if self.view is None:

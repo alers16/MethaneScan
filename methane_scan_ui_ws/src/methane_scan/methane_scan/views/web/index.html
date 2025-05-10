@@ -11,10 +11,14 @@
         height: 100%;
       }
     </style>
-    <!-- Google Maps + librería drawing; callback llama a initMap en map.js -->
-    <script async
-      src="https://maps.googleapis.com/maps/api/js?key=__API_KEY__&libraries=drawing&callback=initMap">
+
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+    <script>
+      new QWebChannel(qt.webChannelTransport, function(ch) {
+        window.bridge = ch.objects.bridge;
+      });
     </script>
+
     <script>
       window.CONFIG = {
         lat: __LAT__,
@@ -22,13 +26,16 @@
         zoom: __ZOOM__
       };
     </script>
-    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-    <script>
-      new QWebChannel(qt.webChannelTransport, function(ch) {
-        window.bridge = ch.objects.bridge;
-      });
-    </script>
+
     <script src="map.js"></script>
+    <!-- Google Maps + librería drawing; callback llama a initMap en map.js -->
+    <script async
+      src="https://maps.googleapis.com/maps/api/js?key=__API_KEY__&libraries=drawing&callback=initMap">
+    </script>
+
+    
+    
+    
   </head>
   <body>
     <div id="map"></div>

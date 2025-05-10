@@ -26,6 +26,8 @@ class MqttRosBridgeNode(Node):
         )
 
         self.create_publishers()
+        self.create_subscriptions()
+        self.get_logger().info("MQTT to ROS bridge node initialized.")
 
     def declare_parameters_ros(self):
         self.declare_parameter('TOPICS.ptu_ready', '/PTU_ready')
@@ -36,7 +38,7 @@ class MqttRosBridgeNode(Node):
         self.declare_parameter('TOPICS.ptu_position', '/PTU_position')
         self.declare_parameter('TOPICS.mqtt2ros', '/mqtt2ros')
         self.declare_parameter('TOPICS.ros2mqtt', '/ros2mqtt') 
-        self.declare_parameter('TOPICS.initialize_hunter', '/initialize_hunter')
+        self.declare_parameter('TOPICS.initialize_hunter', '/initialize_hunter_params')
         self.declare_parameter('TOPICS.start_hunter', '/start_simulation')
         self.declare_parameter('TOPICS.start_stop_hunter', '/start_stop_value')
 
@@ -49,7 +51,10 @@ class MqttRosBridgeNode(Node):
             'tdlas_ready': self.get_parameter('TOPICS.tdlas_ready').value,
             'tdlas_data': self.get_parameter('TOPICS.tdlas_data').value,
             'end_simulation': self.get_parameter('TOPICS.end_simulation').value,
-            'ptu_position': self.get_parameter('TOPICS.ptu_position').value
+            'ptu_position': self.get_parameter('TOPICS.ptu_position').value,
+            'initialize_hunter': self.get_parameter('TOPICS.initialize_hunter').value,
+            'start_hunter': self.get_parameter('TOPICS.start_hunter').value,
+            'start_stop_hunter': self.get_parameter('TOPICS.start_stop_hunter').value
         }       
     
     def create_publishers(self):
@@ -84,7 +89,7 @@ class MqttRosBridgeNode(Node):
             10
         )
     
-    def creater_subscriptions(self):
+    def create_subscriptions(self):
         self.subscription_initialize_hunter = self.create_subscription(
             KeyValue,
             self.params['initialize_hunter'],
@@ -108,7 +113,7 @@ class MqttRosBridgeNode(Node):
         key = msg.key
         if key == self.params['ptu_ready']:
             self.get_logger().info(f"PTU ready recibido: {msg.value}")
-            self.publisher_tdlas_ready.publish(Bool(data=msg.value == 'True'))
+            self.publisher_ptu_ready.publish(Bool(data=msg.value == 'True'))
         elif key == self.params['hunter_position']:
             self.get_logger().info(f"Posición del hunter recibida: {msg.value}")
             self.publisher_hunter_position.publish(String(data=msg.value))
@@ -128,3 +133,16 @@ class MqttRosBridgeNode(Node):
     def send_command(self, msg: KeyValue):
         self.get_logger().info(f"Comando recibido: {msg.key} - {msg.value}")
         self.pub.publish(msg)
+
+def main(args=None):
+    rclpy.init(args=args)
+    app = QApplication(sys.argv)
+    node = MqttRosBridgeNode()
+    rclpy.spin(node)
+    node.get_logger().info("Shutting down MQTT to ROS bridge node.")
+    node.destroy_node()
+    rclpy.shutdown()
+    sys.exit(app.exec_())
+
+if __name__ == '__main__':
+    main()

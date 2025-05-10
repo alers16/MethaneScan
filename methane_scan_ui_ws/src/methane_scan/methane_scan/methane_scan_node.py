@@ -9,6 +9,7 @@ import configparser as cp
 import json
 from methane_scan.controllers.main_controller import MainController  # type: ignore
 from PyQt5 import QtWidgets, QtGui, QtCore
+from diagnostic_msgs.msg import KeyValue
 import os
 import time
 import traceback
@@ -123,17 +124,17 @@ class MethaneScanNode(Node):
                 10
             )
 
-            self.publisher_Hunter_initialized = self.create_publisher(String, 
+            self.publisher_Hunter_initialized = self.create_publisher(KeyValue, 
                                                                       self.get_parameter('TOPICS.initialize_hunter').value,
                                                                       10)
-            self.publisher_start_simulation = self.create_publisher(String,
+            self.publisher_start_simulation = self.create_publisher(KeyValue,
                                                                     self.get_parameter('TOPICS.start_hunter').value,
                                                                     10)
             
             self.publisher_play_simulation = self.create_publisher(String,
                                                                     self.get_parameter('TOPICS.save_simulation').value,
                                                                     10)
-            self.publisher_start_stop_hunter = self.create_publisher(Bool,
+            self.publisher_start_stop_hunter = self.create_publisher(KeyValue,
                                                                       self.get_parameter('TOPICS.start_stop_hunter').value,
                                                                       10)
 
@@ -226,7 +227,7 @@ class MethaneScanNode(Node):
                 self._hunter_position_received = True
             
             self.signals.log_message_signal.emit('info', f'Received hunter position message: {data}')
-            self.signals.hunter_position_signal.emit((data['lat'], data['lng']))
+            self.signals.hunter_position_signal.emit(data)
         except json.JSONDecodeError:
             self.signals.log_message_signal.emit('error', f'Invalid JSON in hunter position message: {msg.data}')
         except Exception as e:
@@ -460,6 +461,7 @@ def main(args=None):
         if controller.view is None or not controller.initialized:
             node.get_logger().error("Failed to initialize controller, exiting")
             return 1
+        
             
         controller.view.show()
         

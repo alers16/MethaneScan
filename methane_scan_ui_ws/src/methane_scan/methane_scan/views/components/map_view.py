@@ -1,6 +1,6 @@
 import os
 from PyQt5.QtCore import QUrl, QObject, pyqtSignal, pyqtSlot, QVariant
-from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineSettings
 from PyQt5.QtWebChannel import QWebChannel
 
 class MapBridge(QObject):
@@ -17,19 +17,28 @@ class MapBridge(QObject):
         self.beamClicked.emit(index, data)
 
 class MyWebEnginePage(QWebEnginePage):
-    def __init__(self, parent=None):
+    def __init__(self, signal : pyqtSignal , parent=None):
+        self.signal = signal
         super().__init__(parent)
         self.last_message = None
     
     def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
         self.last_message = (f"JS Console - Level: {level}, Message: {message}, Line: {lineNumber}, Source: {sourceID}")
-        print(f"JS Console - Level: {level}, Message: {message}, Line: {lineNumber}, Source: {sourceID}")
+        self.signal.emit(self.last_message)
     
 class SatelliteMap(QWebEngineView):
+    javaScriptConsoleMessage = pyqtSignal(str)
     def __init__(self, lat=36.71579, lng=-4.478165, zoom=19, api_key="YOUR_API_KEY", parent=None):
         super().__init__(parent)
+        self.settings().setAttribute(
+            QWebEngineSettings.LocalContentCanAccessRemoteUrls, True
+        )
 
-        self.setPage(MyWebEnginePage(self))
+        self.settings().setAttribute(
+            QWebEngineSettings.LocalContentCanAccessFileUrls, True
+        )
+        self.setPage(MyWebEnginePage(parent=self, signal=self.javaScriptConsoleMessage))
+        
 
         # instalar QWebChannel
         self.bridge = MapBridge()

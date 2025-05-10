@@ -11,6 +11,7 @@ from rclpy.node import Node
 
 from std_msgs.msg import String as ROSString
 from std_msgs.msg import Bool as ROSBool
+from diagnostic_msgs.msg import KeyValue
 import traceback
 from PyQt5.QtCore import pyqtSlot
 import rosbag2_py
@@ -19,7 +20,7 @@ import pexpect
 import threading
 
 class MainController():
-    def __init__(self, node: Node):
+    def __init__(self, node):
         self.node = node
         self.initialized = False
         self.widgets_connected = False
@@ -185,6 +186,7 @@ class MainController():
             if hasattr(self.view, 'home_tab') and self.view.home_tab is not None:
                 self.view.home_tab.path_saved.connect(self.robot_controller._update_path)
                 self.view.home_tab.start_stop_signal.connect(self.pause_test)
+                self.view.home_tab.map_frame.javaScriptConsoleMessage.connect(self._show_error)
             else:
                 self.node.get_logger().warn("Methane scan tab not available for event connection")
                 
@@ -368,11 +370,12 @@ class MainController():
                     "vel": self.robot_controller.robot_speed, 
                     "point_ptu": {"latitude_ptu": self.ptu_controller.PTU_position[0], 
                                   "longitude_ptu": self.ptu_controller.PTU_position[1]},
-                    "points": self.path
+                    "points": self.robot_controller.path
                 }
                 json_info = json.dumps(info)
-                msg = ROSString()
-                msg.data = json_info
+                msg = KeyValue()
+                msg.key = self.node.get_parameter("TOPICS.initialize_hunter").value
+                msg.value = json_info
                 self.node.publisher_Hunter_initialized.publish(msg)
                 self.node.get_logger().info(f"Publicado /initialize_hunter_params: {json_info}")
         except Exception as e:
@@ -386,8 +389,9 @@ class MainController():
                                                 value)
         self.simulation_running = True
         self.view.home_tab.disableStartButton()
-        msg = ROSString()
-        msg.data = json.dumps({"path": self.robot_controller.path, "speed": self.robot_controller.robot_speed})
+        msg = KeyValue()
+        msg.key = self.node.get_parameter("TOPICS.start_hunter").value
+        msg.value = json.dumps({"path": self.robot_controller.path, "speed": self.robot_controller.robot_speed})
         self.node.publisher_start_simulation.publish(msg)
 
     def _record_ros2_bag(self, topic="/TDLAS_data"):
@@ -408,8 +412,9 @@ class MainController():
         """
         self.node.get_logger().info("Test paused")
         
-        msg = ROSBool()
-        msg.data = state
+        msg = KeyValue()
+        msg.key = self.node.get_parameter("TOPICS.start_stop_hunter").value
+        msg.value = state
         self.node.publisher_start_stop_hunter.publish(msg)
     
     def finish_test(self):
