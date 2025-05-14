@@ -21,6 +21,7 @@ DATA_STORE = "map_previews.data"
 class HomePage(QWidget):
     path_saved = pyqtSignal(list)
     start_stop_signal = pyqtSignal(bool)
+    logger_signal = pyqtSignal(str)
 
     def __init__(self, API_KEY, parent=None):
         super().__init__()
@@ -29,6 +30,10 @@ class HomePage(QWidget):
         self.setStyleSheet("""
           *:focus {
                 border: 2px solid #009688;  /* teal para buen contraste */
+                border-radius: 4px;
+           }
+          QPushButton:focus {
+                           border: 2px solid #009688;  /* teal para buen contraste */
                 border-radius: 4px;
            }
         """)
@@ -99,27 +104,28 @@ class HomePage(QWidget):
         map_title_layout.addWidget(map_label)
         map_title_layout.addStretch()
         
-        # Botones de zoom, seleccionar área e importar datos
-        self.btn_select_area = QPushButton("Seleccionar Área")
-        self.btn_clean_area= QPushButton("Limpiar Área")
-        self.btn_clean_area.setDisabled(True)
-        self.btn_clean_area.clicked.connect(self.cleanSelection)
-        btn_zoom_in = QPushButton("+")
-        btn_zoom_out = QPushButton("-")
-        
-        map_buttons_layout = QHBoxLayout()
-        map_buttons_layout.addWidget(self.btn_select_area)
-        map_buttons_layout.addWidget(self.btn_clean_area)
-        map_buttons_layout.addWidget(btn_zoom_in)
-        map_buttons_layout.addWidget(btn_zoom_out)
-        map_layout.addLayout(map_buttons_layout)
-        
         # Marco donde irá el mapa
         scene = QGraphicsScene()
         scene.setSceneRect(0, 0, 1000, 1000)
         self.map_frame = SatelliteMap(api_key=self._API_KEY)
         self.map_frame.setObjectName("mapFrame")
         self.map_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        # Botones de zoom, seleccionar área e importar datos
+        self.btn_select_area = QPushButton("Seleccionar Área")
+        self.btn_clean_area= QPushButton("Limpiar Área")
+        self.btn_clean_area.setDisabled(True)
+        self.btn_clean_area.clicked.connect(lambda: self.cleanSelection(refresh=True))
+        btn_zoom_in = QPushButton("+")
+        btn_zoom_out = QPushButton("-")
+
+        map_buttons_layout = QHBoxLayout()
+        map_buttons_layout.addWidget(self.btn_select_area)
+        map_buttons_layout.addWidget(self.btn_clean_area)
+        map_buttons_layout.addWidget(btn_zoom_in)
+        map_buttons_layout.addWidget(btn_zoom_out)
+        map_layout.addLayout(map_buttons_layout)
+
         map_layout.addWidget(self.map_frame)
         
         # 2b) Zona de Control
@@ -339,7 +345,8 @@ class HomePage(QWidget):
         for w in (
             self.card_ptu, self.card_tdlas, self.card_robot,
             self.btn_select_area, self.btn_clean_area,
-            btn_zoom_in, btn_zoom_out
+            btn_zoom_in, btn_zoom_out, self.btn_iniciar,
+            self.btn_pausar, self.btn_abortar
         ):
             w.setFocusPolicy(Qt.StrongFocus)
 
@@ -374,6 +381,7 @@ class HomePage(QWidget):
     def selectArea(self):
         self.map_frame.enableDrawing()
         self.cleanSelection()
+        self.btn_clean_area.setDisabled(False)
         self.btn_select_area.setText("Guardar Selección")
         try:
             self.btn_select_area.clicked.disconnect()
@@ -399,6 +407,7 @@ class HomePage(QWidget):
 
 
     def saveSelection(self):
+        Toast("Guardando selección...", self.parent, "info", 3000).show()
         self.btn_select_area.setText("Seleccionar Area")
         self.map_frame.disableDrawing()
         try:
@@ -417,6 +426,7 @@ class HomePage(QWidget):
         - Marcador verde en el inicio y rojo en el final.
         - Retorna los bytes de la imagen.
         """
+
         if not coords or len(coords) < 2:
             raise ValueError("Se requieren al menos dos puntos para generar la ruta.")
 
@@ -474,24 +484,30 @@ class HomePage(QWidget):
         with open(DATA_STORE, 'wb') as f:
             pickle.dump(store, f)
 
-    def cleanSelection(self):
+    def cleanSelection(self, refresh=False):
         self.map_frame.clearSelection()
         self.btn_clean_area.setDisabled(True)
-        self.path_saved.emit([])
+        if refresh:
+            self.path_saved.emit([])
 
     def handleCorners(self, corners):
         """
         corners es la lista [SW, NW, NE, SE] o None si no hay rectángulo.
         Cada esquina es un dict con lat, lng.
         """
+        if corners == [] or corners is None:
+            self.btn_clean_area.setDisabled(True)
+            self.path_saved.emit([None])
+            return
+
         if corners is not None:
             self.path_saved.emit(corners)
             self.save_map_preview(time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime()), corners)
             self.btn_clean_area.setDisabled(False)
 
             self.parent.select_trajectory_widget.refresh_trajectories()
-        else:
-            Toast("No se ha seleccionado un área.", self.parent, "warning").show()
+        
+
     
     def enableStartButtonCallback(self, callback):
         if self.start_callback is None:

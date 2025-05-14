@@ -1,85 +1,115 @@
 from PyQt5.QtCore import QPoint, Qt
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QApplication
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QApplication, QToolButton, QButtonGroup
 import platform
 
 class TitleBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedHeight(40)
+        self.setFixedHeight(36)
+        self._restore_ratio = 0.5
+
+        # Fondo tipo VSCode Dark
+        self.setStyleSheet("""
+            TitleBar { background: #252526; }
+        """)
         self.initUI()
-        self.start = QPoint(0, 0)
-        self.moving = False
-        self._restore_ratio = 0.5  # Valor por defecto para posicionar al restaurar
 
     def initUI(self):
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 0, 10, 0)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 0, 12, 0)
+        layout.setSpacing(8)
 
-        # Izquierda: Título y botones de navegación
+        # — Texto de la app
         self.appTitle = QLabel("MethaneScan", self)
-        self.appTitle.setStyleSheet("color: #ECECEC; font-size: 14pt;")
+        self.appTitle.setStyleSheet("""
+            color: #CCCCCC;
+            font: bold 12pt "Segoe UI";
+        """)
         layout.addWidget(self.appTitle)
 
-        self.navMethane = QPushButton("Inicio", self)
-        self.navMethane.setStyleSheet("background: transparent; color: #ECECEC; border: none; font-size: 10pt;")
-        self.navMethane.clicked.connect(self.parent.switch_to_home_tab)
-        self.navDatos = QPushButton("Datos", self)
-        self.navDatos.setStyleSheet("background: transparent; color: #ECECEC; border: none; font-size: 10pt;")
-        self.navSiulation = QPushButton("Simulación", self)
-        self.navSiulation.setStyleSheet("background: transparent; color: #ECECEC; border: none; font-size: 10pt;")
-        self.navSiulation.clicked.connect(self.parent.switch_to_simulation_tab)
-        layout.addWidget(self.navMethane)
-        layout.addWidget(self.navDatos)
-        layout.addWidget(self.navSiulation)
+        # — Botones de navegación en grupo exclusivo
+        self.navGroup = QButtonGroup(self)
+        self.navGroup.setExclusive(True)
+
+        def makeNav(name, slot):
+            btn = QToolButton(self)
+            btn.setText(name)
+            btn.setCheckable(True)
+            btn.setStyleSheet("""
+                QToolButton {
+                    background: transparent;
+                    color: #CCCCCC;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                }
+                QToolButton:hover, QToolButton:focus {
+                    background: #3E3E42;
+                    color: #FFFFFF;
+                }
+                QToolButton:checked {
+                    background: #094771;
+                    color: #FFFFFF;
+                }
+            """)
+            btn.clicked.connect(slot)
+            self.navGroup.addButton(btn)
+            layout.addWidget(btn)
+            return btn
+
+        # Creamos y guardamos referencias
+        self.btnInicio    = makeNav("Inicio",     self.parent.switch_to_home_tab)
+        self.btnSimulacion= makeNav("Simulación", self.parent.switch_to_simulation_tab)
+
+        # Seleccionamos Inicio por defecto
+        self.btnInicio.setChecked(True)
+
         layout.addStretch()
 
-        # Derecha: Botones de control de ventana
-        self.btnMin = QPushButton("—", self)
-        self.btnMin.setFixedSize(40, 30)
-        self.btnMin.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #ECECEC;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #3A3A3A;
-            }
-        """)
-        self.btnMax = QPushButton("□", self)
-        self.btnMax.setFixedSize(40, 30)
-        self.btnMax.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #ECECEC;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #3A3A3A;
-            }
-        """)
-        self.btnClose = QPushButton("X", self)
-        self.btnClose.setFixedSize(40, 30)
-        self.btnClose.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #ECECEC;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #E81123;
-            }
-        """)
-        layout.addWidget(self.btnMin)
-        layout.addWidget(self.btnMax)
-        layout.addWidget(self.btnClose)
+        self.mqtt_status_label = QLabel("MQTT Connection: 🟢", self)
+        layout.addWidget(self.mqtt_status_label)
+        layout.addSpacing(10)
+        self.mqtt_bridge_label = QLabel("MQTT Bridge: 🟢", self)
+        layout.addWidget(self.mqtt_bridge_label)
+        layout.addSpacing(10)
 
-        # Conexiones de botones
-        self.btnMin.clicked.connect(self.parent.showMinimized)
-        self.btnMax.clicked.connect(self.maximize_restore)
-        self.btnClose.clicked.connect(self.parent.close)
+        # — Botones de ventana (min, max/rest, close)
+        for sym, name, slot in (
+            ("–", "Minimize", self.parent.showMinimized),
+            ("□", "MaxRestore", self.maximize_restore),
+            ("✕", "Close",      self.parent.close),
+        ):
+            tb = QToolButton(self)
+            tb.setText(sym)
+            tb.setObjectName(name)
+            tb.setFixedSize(36, 28)
+            tb.setFocusPolicy(Qt.StrongFocus)
+            tb.setStyleSheet(f"""
+                QToolButton#{name} {{
+                    background: transparent;
+                    color: #CCCCCC;
+                    border-radius: 2px;
+                }}
+                QToolButton#{name}:hover {{
+                    background: #3E3E42;
+                }}
+                QToolButton#{name}:pressed {{
+                    background: {"#E81123" if name=="Close" else "#094771"};
+                }}
+                QToolButton#{name}:focus {{
+                    outline: 1px solid #007ACC;
+                }}
+            """)
+            tb.clicked.connect(slot)
+            layout.addWidget(tb)
+
+        # Guardamos para cualquier uso futuro
+        count = layout.count()
+        self.btnMin, self.btnMax, self.btnClose = (
+            layout.itemAt(count-3).widget(),
+            layout.itemAt(count-2).widget(),
+            layout.itemAt(count-1).widget()
+        )
 
 
     def maximize_restore(self):
@@ -127,6 +157,24 @@ class TitleBar(QWidget):
         elif so == "Linux":
             if self.parent.y() <= 56:
                 self.maximize_restore()
+
+    def set_active_tab(self, tab_name):
+        """Set the active tab based on the name."""
+        if tab_name == "Inicio":
+            self.btnInicio.setChecked(True)
+        elif tab_name == "Simulación":
+            self.btnSimulacion.setChecked(True)
+
+    def set_mqtt_status(self, status):
+        """Set the MQTT connection status."""
+        if status:
+            self.mqtt_status_label.setText("MQTT Connection: 🟢")
+        else:
+            self.mqtt_status_label.setText("MQTT Connection: 🔴")
     
-    def register_home_callback(self, callback):
-        self.navMethane.clicked.connect(callback)
+    def set_mqtt_bridge_status(self, status):
+        """Set the MQTT bridge status."""
+        if status:
+            self.mqtt_bridge_label.setText("MQTT Bridge: 🟢")
+        else:
+            self.mqtt_bridge_label.setText("MQTT Bridge: 🔴")

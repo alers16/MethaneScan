@@ -114,6 +114,7 @@ function getRectCorners() {
     nw,
     { latitude: ne.lat(), longitude: ne.lng() },
     se,
+    { latitude: sw.lat(), longitude: ne.lng() }
   ];
 }
 

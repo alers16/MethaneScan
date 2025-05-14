@@ -10,5 +10,6 @@
         <file alias="icon_Trayectoria.svg">resources/pin-map-fill.svg</file>
         <file alias="icon_DeteleTraj.svg">resources/trash-fill.svg</file>
         <file alias="icon_RenameTraj.svg">resources/pencil-square.svg</file>
+        <file alias="Logo">resources/methane_scan.svg</file>
     </qresource>
 </RCC>

@@ -8,8 +8,10 @@ from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QObject, QEvent
 
 import threading
 import pexpect
+import os
 
 from methane_scan.views.components.map_view import SatelliteMap # type: ignore
+from methane_scan.views.components.toast import Toast # type: ignore
 
 class ResizeListener(QObject):
     def __init__(self, target, threshold):
@@ -40,9 +42,20 @@ class ResizeListener(QObject):
 
 class SimulationPage(QWidget):
     error_signal = pyqtSignal(str)
-    def __init__(self, API_KEY):
+    def __init__(self, API_KEY, parent=None):
         super().__init__()
+        self.parent = parent
         self.setObjectName("methaneScanTab")
+        self.setStyleSheet("""
+          *:focus {
+                border: 2px solid #009688;  /* teal para buen contraste */
+                border-radius: 4px;
+           }
+          QPushButton:focus {
+                           border: 2px solid #009688;  /* teal para buen contraste */
+                border-radius: 4px;
+           }
+        """)
         self._API_KEY = API_KEY
         self.frecuency = 1.0
         self._build_ui()
@@ -50,6 +63,20 @@ class SimulationPage(QWidget):
         self._is_running = False
         self.child = None
         self.save_positions = []
+
+        self.installEventFilter(self)
+    
+    def eventFilter(self, obj, event):
+        # Si pulsas Return o Enter
+        if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            w = self.focusWidget()
+            if isinstance(w, QPushButton) and w.isEnabled():
+                w.click()
+                return True    # consumimos el evento
+            if isinstance(w, QLineEdit):
+                # Si es un QLineEdit, lo ignoramos
+                return False
+        return super().eventFilter(obj, event)
         
 
     def _build_ui(self):
@@ -96,10 +123,11 @@ class SimulationPage(QWidget):
         self.file_input = QLineEdit()
         self.file_input.setPlaceholderText("Selecciona un archivo .bag...")
         self.file_input.setReadOnly(True)
-        btn_browse = QPushButton("Examinar...")
-        btn_browse.clicked.connect(self._on_browse)
+        self.btn_browse = QPushButton("Examinar...")
+        self.btn_browse.setFocusPolicy(Qt.StrongFocus)
+        self.btn_browse.clicked.connect(self._on_browse)
         file_layout.addWidget(self.file_input)
-        file_layout.addWidget(btn_browse)
+        file_layout.addWidget(self.btn_browse)
         control_layout.addLayout(file_layout)
 
         # --- Bloque de datos (Podemos usar un QFrame "interior") ---
@@ -269,21 +297,25 @@ class SimulationPage(QWidget):
         actions_grid.setVerticalSpacing(10)
 
         self.btn_next_message= QPushButton("Siguiente Msg")
+        self.btn_next_message.setFocusPolicy(Qt.StrongFocus)
         self.btn_next_message.setObjectName("btnNextMessage")
         self.btn_next_message.setDisabled(True)
         self.btn_next_message.clicked.connect(self._on_next_message)
 
         self.btn_increase_rate = QPushButton("Aumentar Frec")
+        self.btn_increase_rate.setFocusPolicy(Qt.StrongFocus)
         self.btn_increase_rate.setObjectName("btnIncreaseRate")
         self.btn_increase_rate.setDisabled(True)
         self.btn_increase_rate.clicked.connect(self._increase_rate)
 
         self.btn_decrease_rate = QPushButton("Disminuir Frec")
+        self.btn_decrease_rate.setFocusPolicy(Qt.StrongFocus)
         self.btn_decrease_rate.setObjectName("btnDecreaseRate")
         self.btn_decrease_rate.setDisabled(True)
         self.btn_decrease_rate.clicked.connect(self._decrease_rate)
 
         self.btn_clean_map = QPushButton("Limpiar Mapa")
+        self.btn_clean_map.setFocusPolicy(Qt.StrongFocus)
         self.btn_clean_map.setObjectName("btnCleanMap")
         self.btn_clean_map.setDisabled(True)
         self.btn_clean_map.clicked.connect(self._clear_map)
@@ -311,16 +343,19 @@ class SimulationPage(QWidget):
         
         # -- Boton de inicio de simulasion --
         self.btn_iniciar = QPushButton("Iniciar")
+        self.btn_iniciar.setFocusPolicy(Qt.NoFocus)
         self.btn_iniciar.setObjectName("btnIniciar") 
         self.btn_iniciar.setDisabled(True)
         self.btn_iniciar.clicked.connect(self.start_simulation)
 
         self.btn_pausar = QPushButton("Pausar")
+        self.btn_pausar.setFocusPolicy(Qt.NoFocus)
         self.btn_pausar.setObjectName("btnPausar")
         self.btn_pausar.setDisabled(True)
         self.btn_pausar.clicked.connect(self._pause_simulation)
 
         self.btn_abortar = QPushButton("Abortar")
+        self.btn_abortar.setFocusPolicy(Qt.NoFocus)
         self.btn_abortar.setObjectName("btnAbortar")
         self.btn_abortar.setDisabled(True)
         self.btn_abortar.clicked.connect(self.abort_simulation)
@@ -355,6 +390,7 @@ class SimulationPage(QWidget):
 
         # Tabla
         self.table = QTableWidget(0, 4)
+        self.table.setFocusPolicy(Qt.NoFocus)
         self.table.setHorizontalHeaderLabels(["average_ppmxm", "average_reflection_strength", "average_absorption_strength", "timestamp"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -379,6 +415,15 @@ class SimulationPage(QWidget):
 
         # 5) Añadir splitter al layout principal
         layout.addWidget(splitter)
+
+        self.setTabOrder(self.btn_browse, self.btn_increase_rate)
+        self.setTabOrder(self.btn_increase_rate, self.btn_next_message)
+        self.setTabOrder(self.btn_next_message, self.btn_decrease_rate)
+        self.setTabOrder(self.btn_decrease_rate, self.btn_clean_map)
+        self.setTabOrder(self.btn_clean_map, self.btn_iniciar)
+        self.setTabOrder(self.btn_iniciar, self.btn_pausar)
+        self.setTabOrder(self.btn_pausar, self.btn_abortar)
+        self.setTabOrder(self.btn_abortar, self.file_input)
     
     def set_tdlas_data(self, data):
         self.methane_label.setText(f"Medición de Metano: {data['average_ppmxm']}")
@@ -462,6 +507,7 @@ class SimulationPage(QWidget):
             self.file_path = folder
             self.not_ready_label.hide()
             self.btn_iniciar.setDisabled(False)
+            self.btn_iniciar.setFocusPolicy(Qt.StrongFocus)
     
     def _pause_simulation(self):
         if self.child and self.child.isalive():
@@ -469,8 +515,10 @@ class SimulationPage(QWidget):
                 position = self.save_positions[self.table.rowCount()-1]
                 self.set_robot_position(position=[position["lat"], position["lng"]], is_running=False)
                 self.btn_next_message.setDisabled(True)
+                self.btn_clean_map.setFocusPolicy(Qt.NoFocus)
             else:
                 self.btn_next_message.setDisabled(False)
+                self.btn_clean_map.setFocusPolicy(Qt.StrongFocus)
             self.child.send(' ')
             txt = "Reanudar" if self._is_running else "Pausar"
             self.btn_pausar.setText(txt)
@@ -500,16 +548,38 @@ class SimulationPage(QWidget):
         self.save_positions = []
         self.table.setRowCount(0)
         self.btn_clean_map.setDisabled(True)
+        self.btn_next_message.setFocusPolicy(Qt.NoFocus)
 
 
 
     def start_simulation(self):
+        if not self.file_path:
+            Toast("¡No se ha seleccionado una carpeta!", self.parent, "error").show()
+            self.error_signal.emit("No se ha seleccionado un archivo .bag")
+            return
+
+        # Verificar que exista metadata.yaml y al menos un .db3 en la carpeta seleccionada
+        entries = os.listdir(self.file_path)
+        has_meta = "metadata.yaml" in entries
+        has_db3 = any(name.lower().endswith(".db3") for name in entries)
+
+        if not has_meta or not has_db3:
+            Toast(
+                "El directorio seleccionado es inválido. ",
+                self.parent,
+                "error"
+            ).show()
+            self.error_signal.emit("Falta metadata.yaml o archivo .db3 en el directorio")
+            return
         self._start_process()
 
         # Deshabilitar el botón de iniciar y habilitar el de abortar
         self.btn_iniciar.setDisabled(True)
+        self.btn_iniciar.setFocusPolicy(Qt.NoFocus)
         self.btn_pausar.setDisabled(False)
+        self.btn_pausar.setFocusPolicy(Qt.StrongFocus)
         self.btn_abortar.setDisabled(False)
+        self.btn_abortar.setFocusPolicy(Qt.StrongFocus)
         self.change_button_rosbag(False)
         self.btn_pausar.setText("Pausar")
         self._is_running = True
@@ -524,11 +594,16 @@ class SimulationPage(QWidget):
     def _on_simulation_end(self):
         # Vuelve todo a como estaba
         self.btn_iniciar.setDisabled(False)
+        self.btn_iniciar.setFocusPolicy(Qt.StrongFocus)
         self.btn_pausar.setDisabled(True)
+        self.btn_pausar.setFocusPolicy(Qt.NoFocus)
         self.btn_abortar.setDisabled(True)
+        self.btn_abortar.setFocusPolicy(Qt.NoFocus)
         self.btn_clean_map.setDisabled(False)
+        self.btn_clean_map.setFocusPolicy(Qt.StrongFocus)
         self.change_button_rosbag(True)
         self.btn_next_message.setDisabled(True)
+        self.btn_next_message.setFocusPolicy(Qt.NoFocus)
         self._is_running = False
         self.child       = None
         self.frecuency = 1.0
@@ -555,7 +630,10 @@ class SimulationPage(QWidget):
 
     def change_button_rosbag(self, state):
         self.btn_increase_rate.setDisabled(state)
+        self.btn_increase_rate.setFocusPolicy(Qt.NoFocus if state else Qt.StrongFocus)
         self.btn_decrease_rate.setDisabled(state)
+        self.btn_decrease_rate.setFocusPolicy(Qt.NoFocus if state else Qt.StrongFocus)
+
 
     def abort_simulation(self):
         if self.child and self.child.isalive():

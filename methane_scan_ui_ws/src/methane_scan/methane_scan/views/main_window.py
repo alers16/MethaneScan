@@ -75,9 +75,11 @@ class MainWindow(QMainWindow):
         self.tab_widget = QStackedWidget()
         # Agregamos la pantalla principal (HomePage) como la primera pestaña
         self.home_tab = HomePage(API_KEY, self)
+        self.home_tab.setObjectName("Inicio")
         self.tab_widget.addWidget(self.home_tab)
         # Agregamos la pestaña de simulación (SimulationPage) como la segunda pestaña
-        self.simulation_tab = SimulationPage(API_KEY)
+        self.simulation_tab = SimulationPage(API_KEY, self)
+        self.simulation_tab.setObjectName("Simulación")
         self.tab_widget.addWidget(self.simulation_tab)
         self.tab_widget.setCurrentWidget(self.home_tab)
         # Se pueden agregar más pestañas y cambiar entre ellas mediante callbacks de la title bar
@@ -137,6 +139,16 @@ class MainWindow(QMainWindow):
         self.simulation_tab.map_frame.setMinimumSize(new_width, new_height)
         # Let dialogs size themselves based on their content
         # No fixed sizing for dialogs to allow them to adapt to their content
+
+    def keyPressEvent(self, event):
+        # Ctrl+Tab para ciclar entre pestañas
+        if event.modifiers() & Qt.ControlModifier and event.key() == Qt.Key_Tab:
+            next_index = (self.tab_widget.currentIndex() + 1) % self.tab_widget.count()
+            self.tab_widget.setCurrentIndex(next_index)
+            self.titleBar.set_active_tab(self.tab_widget.widget(next_index).objectName())
+
+        else:
+            super().keyPressEvent(event)
     
     def toggle_theme(self):
         """Cambia entre modo claro y oscuro."""
@@ -159,8 +171,7 @@ class MainWindow(QMainWindow):
         self.home_tab.register_trajectory_callback(callback)
 
     def register_home_callback(self, callback):
-        self.titleBar.register_home_callback(callback)
-        
+
         # Connect dialog close events to home callback
         self.ptu_config_dialog.rejected.connect(callback)
         self.robot_config_dialog.rejected.connect(callback)

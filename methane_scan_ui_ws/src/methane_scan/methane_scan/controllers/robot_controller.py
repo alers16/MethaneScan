@@ -43,11 +43,11 @@ class RobotController:
             if self.robot_speed is not None and speed == self.robot_speed:
                 self.node.get_logger().info("No change in robot speed")
                 return
-            Toast(f"¡Posición del robot actualizada a {speed} m/s", self.view, "info", 3000).show()
             self.robot_speed = speed
             
             self.node.get_logger().info(f"Robot speed updated: {speed}")
             self.check_Robot_ready()
+            Toast(f"¡Posición del robot actualizada a {speed} m/s", self.view, "info", 3000).show()
         except TypeError as e:
             Toast("Error: la velocidad debe ser un número", self.view, "error", 3000).show()
             self.node.get_logger().error(f"TypeError updating robot speed: {e}")
@@ -155,8 +155,16 @@ class RobotController:
             registra el error y muestra el traceback.
         """
         try:
-            if path is None or path == []:
-                self.node.get_logger().warn("Received null/empty path")
+            if path == [None]:
+                self.node.get_logger().warn("Received null path")
+                self.path = []
+                Toast("¡No se ha seleccionado ninguna trayectoria!", self.view, "warning", 3000).show()
+                self.check_Robot_ready()
+                return
+            if path == []:
+                self.path = []
+                self.node.get_logger().warn("empty path")
+                self.check_Robot_ready()
                 return
                 
             self.path = path

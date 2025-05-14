@@ -14,6 +14,13 @@ import os
 import time
 import traceback
 from typing import Optional, Dict, Any, Callable
+from PyQt5 import QtCore
+from rcl_interfaces.msg import Log
+from rclpy.duration import Duration
+import rclpy
+from .views.splash_screen import SplashScreen  # type: ignore
+import methane_scan.qresources_rc  # type: ignore # Tu archivo de recursos compilado
+
 
 class RosQtSignals(QtCore.QObject):
     ptu_ready_signal = QtCore.pyqtSignal(bool)
@@ -24,6 +31,61 @@ class RosQtSignals(QtCore.QObject):
     end_simulation_signal = QtCore.pyqtSignal(bool)
     play_simulation_signal = QtCore.pyqtSignal(dict)
     ptu_position_signal = QtCore.pyqtSignal(dict)
+    mqtt_connection_signal = QtCore.pyqtSignal(bool)
+    mqtt_bridge_status_signal = QtCore.pyqtSignal(bool)
+
+class NodeChecker(QtCore.QThread):
+    nodeReady = QtCore.pyqtSignal(str)  # emite nombre del nodo cuando su topic reporta
+    allReady  = QtCore.pyqtSignal()     # emite cuando todos los nodos han reportado
+
+    def __init__(self, wait_for: dict, parent=None):
+        """
+        wait_for = {
+          'mqtt_ros_bridge_node': {
+             'status_topic': '/mqtt_bridge/status',
+             'status_type': String
+          },
+          'otro_nodo': {
+             'status_topic': '/otro_nodo/status',
+             'status_type': String
+          }
+        }
+        """
+        super().__init__(parent)
+        self.wait_for = wait_for
+        self._ready = set()
+
+    def run(self):
+        checker = rclpy.create_node('splash_node_checker')
+
+        # Para cada nodo, creamos una suscripción a su topic de estado
+        for node_name, cfg in self.wait_for.items():
+            topic = cfg['status_topic']
+            typ   = cfg['status_type']
+
+            # Generamos una callback que capture node_name en closure
+            def make_cb(name):
+                def cb(msg):
+                    if name not in self._ready and msg.data:
+                        self._ready.add(name)
+                        self.nodeReady.emit(name)
+                return cb
+
+            checker.create_subscription(
+                typ,
+                topic,
+                make_cb(node_name),
+                qos_profile=10
+            )
+
+        # Spin hasta que todos hayan publicado al menos una vez
+        while rclpy.ok() and self._ready != set(self.wait_for.keys()):
+            rclpy.spin_once(checker, timeout_sec=0.2)
+
+        # Una vez listos todos:
+        time.sleep(1)  # Esperamos un segundo para que la UI se estabilice
+        self.allReady.emit()
+        checker.destroy_node()
 
 class MethaneScanNode(Node):
     """ROS2 node with thread-safety and proper resource management for MethaneScan."""
@@ -37,6 +99,7 @@ class MethaneScanNode(Node):
         # Thread synchronization
         self._lock = threading.RLock()
         self.signals = RosQtSignals()
+        self.now = self.get_clock().now()
         
         # State tracking
         self._node_running = True
@@ -53,6 +116,10 @@ class MethaneScanNode(Node):
         self._last_TDLAS_ready = None
         self._last_TDLAS_data = None
         self._last_ptu_position = None
+        self._mqtt_conn_timed_out   = False
+        self._mqtt_bridge_timed_out = False
+        self._last_mqtt_conn    = self.now
+        self._last_mqtt_bridge  = self.now
         
         
         # Initialize callbacks with safe no-op functions
@@ -63,6 +130,8 @@ class MethaneScanNode(Node):
         self._callback_end_simulation: Optional[Callable[[bool], None]] = None
         self._callback_play_simulation: Optional[Callable[[bool], None]] = None
         self._callback_ptu_position: Optional[Callable[[Dict[str, Any]], None]] = None
+        self._callback_mqtt_connection: Optional[Callable[[bool], None]] = None
+        self._callback_mqtt_bridge_status: Optional[Callable[[bool], None]] = None
         
         # Connect Qt signals to thread-safe handler methods
         self.signals.ptu_ready_signal.connect(self._handle_ptu_ready_qt)
@@ -73,6 +142,8 @@ class MethaneScanNode(Node):
         self.signals.end_simulation_signal.connect(self._handle_end_simulation_qt)
         self.signals.play_simulation_signal.connect(self._handle_play_simulation_qt)
         self.signals.ptu_position_signal.connect(self._handle_ptu_position_qt)
+        self.signals.mqtt_connection_signal.connect(self._handle_mqtt_connection_qt)
+        self.signals.mqtt_bridge_status_signal.connect(self._handle_mqtt_bridge_status_qt)
         
         # Create subscriptions and publishers with proper error handling
         try:
@@ -124,6 +195,22 @@ class MethaneScanNode(Node):
                 10
             )
 
+            # MQTT connection status subscription + timeout timer
+            self.subscription_mqtt_connection = self.create_subscription(
+                Bool,
+                self.get_parameter('TOPICS.mqtt_connection_status').value,
+                self._listener_mqtt_connection_callback_safe,
+                10
+            )
+
+            # MQTT bridge status subscription + timeout timer
+            self.subscription_mqtt_bridge_status = self.create_subscription(
+                Bool,
+                self.get_parameter('TOPICS.mqtt_bridge_status').value,
+                self._listener_mqtt_bridge_status_callback_safe,
+                10
+            )
+
             self.publisher_Hunter_initialized = self.create_publisher(KeyValue, 
                                                                       self.get_parameter('TOPICS.initialize_hunter').value,
                                                                       10)
@@ -138,12 +225,29 @@ class MethaneScanNode(Node):
                                                                       self.get_parameter('TOPICS.start_stop_hunter').value,
                                                                       10)
 
+            self.create_timer(0.5, self._check_for_timeouts)
+
             self._initialized = True
             self.get_logger().info('MethaneScanNode initialized successfully')
         except Exception as e:
             self.get_logger().error(f'Failed to initialize MethaneScanNode: {str(e)}')
             traceback.print_exc()
             self._initialized = False
+    
+    def _check_for_timeouts(self):
+        now = self.get_clock().now()
+        timeout = Duration(seconds=3)
+
+        # MQTT connection status timeout
+        if not self._mqtt_conn_timed_out and now - self._last_mqtt_conn > timeout:
+            self._mqtt_conn_timed_out = True
+            self._on_mqtt_connection_timeout()
+
+        # MQTT bridge status timeout
+        if not self._mqtt_bridge_timed_out and now - self._last_mqtt_bridge > timeout:
+            self._mqtt_bridge_timed_out = True
+            self._on_mqtt_bridge_timeout()
+    
 
     def declare_parameters_ros(self):
         self.declare_parameter('TOPICS.ptu_ready', "/PTU_ready")
@@ -157,9 +261,12 @@ class MethaneScanNode(Node):
         self.declare_parameter('TOPICS.save_simulation', "/save_simulation")
         self.declare_parameter('TOPICS.start_stop_hunter', "/start_stop_value")
         self.declare_parameter('TOPICS.ptu_position', "/PTU_position")
+        self.declare_parameter('TOPICS.mqtt_connection_status', "/connection_status")
+        self.declare_parameter('TOPICS.mqtt_bridge_status', "/mqtt_status")
     
     def register_callbacks(self, ptu_ready_callback, hunter_position_callback, TDLAS_ready_callback, TDLAS_data_callback,
-                           end_simulation_callback, play_simulation_callback, ptu_position_callback):
+                           end_simulation_callback, play_simulation_callback, ptu_position_callback, 
+                           mqtt_connection_callback, mqtt_bridge_status_callback):
         """Register callbacks with thread-safe protection."""
         with self._lock:
             self._callback_ptu_ready = ptu_ready_callback
@@ -169,6 +276,8 @@ class MethaneScanNode(Node):
             self._callback_end_simulation = end_simulation_callback
             self._callback_play_simulation = play_simulation_callback
             self._callback_ptu_position = ptu_position_callback
+            self._callback_mqtt_connection = mqtt_connection_callback
+            self._callback_mqtt_bridge_status = mqtt_bridge_status_callback
             self._callbacks_registered = True
             self.get_logger().info('Callbacks registered successfully')
             
@@ -307,6 +416,40 @@ class MethaneScanNode(Node):
         except Exception as e:
             self.signals.log_message_signal.emit('error', f'Error in PTU position callback: {str(e)}')
             traceback.print_exc()
+        
+    def _listener_mqtt_connection_callback_safe(self, msg):
+        """Thread-safe wrapper for MQTT connection status message callback."""
+        if not self._node_running or not self._subscriptions_active:
+            return
+        
+        try:
+            with self._lock:
+                mqtt_connection = msg.data
+                self._last_mqtt_conn = self.get_clock().now()
+                self._mqtt_conn_timed_out = False
+            
+            self.signals.log_message_signal.emit('info', f'Received MQTT connection status message: {mqtt_connection}')
+            self.signals.mqtt_connection_signal.emit(mqtt_connection)
+        except Exception as e:
+            self.signals.log_message_signal.emit('error', f'Error in MQTT connection callback: {str(e)}')
+            traceback.print_exc()
+    
+    def _listener_mqtt_bridge_status_callback_safe(self, msg):
+        """Thread-safe wrapper for MQTT bridge status message callback."""
+        if not self._node_running or not self._subscriptions_active:
+            return
+        
+        try:
+            with self._lock:
+                mqtt_bridge_status = msg.data
+                self._last_mqtt_bridge = self.get_clock().now()
+                self._mqtt_bridge_timed_out = False
+            
+            self.signals.log_message_signal.emit('info', f'Received MQTT bridge status message: {mqtt_bridge_status}')
+            self.signals.mqtt_bridge_status_signal.emit(mqtt_bridge_status)
+        except Exception as e:
+            self.signals.log_message_signal.emit('error', f'Error in MQTT bridge status callback: {str(e)}')
+            traceback.print_exc()
 
     def _handle_ptu_ready_qt(self, ptu_ready):
         """Qt thread handler for PTU ready signal."""
@@ -392,6 +535,25 @@ class MethaneScanNode(Node):
         except Exception as e:
             self.get_logger().error(f'Error handling PTU position in Qt thread: {str(e)}')
             traceback.print_exc()
+    
+    def _handle_mqtt_connection_qt(self, mqtt_connection):
+        """Qt thread handler for MQTT connection status signal."""
+        try:
+            if self._callbacks_registered and self._callback_mqtt_connection:
+                self.get_logger().info(f'MQTT connection status: {mqtt_connection}')
+                self._callback_mqtt_connection(mqtt_connection)
+        except Exception as e:
+            self.get_logger().error(f'Error handling MQTT connection in Qt thread: {str(e)}')
+            traceback.print_exc()
+    
+    def _handle_mqtt_bridge_status_qt(self, mqtt_bridge_status):
+        """Qt thread handler for MQTT bridge status signal."""
+        try:
+            if self._callbacks_registered and self._callback_mqtt_bridge_status:
+                self._callback_mqtt_bridge_status(mqtt_bridge_status)
+        except Exception as e:
+            self.get_logger().error(f'Error handling MQTT bridge status in Qt thread: {str(e)}')
+            traceback.print_exc()
 
     def pause_subscriptions(self):
         """Pause processing of incoming messages."""
@@ -417,6 +579,14 @@ class MethaneScanNode(Node):
         
         # Resources will be cleaned up in main function's finally block
 
+    def _on_mqtt_connection_timeout(self):
+        self.get_logger().warn('MQTT connection status timeout')
+        self.signals.mqtt_connection_signal.emit(False)
+    
+    def _on_mqtt_bridge_timeout(self):
+        self.get_logger().warn('MQTT bridge status timeout')
+        self.signals.mqtt_bridge_status_signal.emit(False)
+
 
 def main(args=None):
     """Main function with proper resource management and error handling."""
@@ -426,6 +596,10 @@ def main(args=None):
     app = None
     controller = None
     timer = None
+
+    nodos = [
+        "mqtt_bridge",
+        "mqtt_ros_bridge_node"]
     
     try:
         # Initialize ROS
@@ -462,8 +636,27 @@ def main(args=None):
             node.get_logger().error("Failed to initialize controller, exiting")
             return 1
         
-            
-        controller.view.show()
+        splash = SplashScreen(":Logo", nodos)
+        splash.show()
+
+        wait_for = {
+            'mqtt_ros_bridge_node': {
+                'status_topic': '/connection_status',
+                'status_type': Bool
+            },
+            'mqtt_bridge': {
+                'status_topic': '/mqtt_status',
+                'status_type': Bool
+            }
+        }
+        
+        checker = NodeChecker(wait_for=wait_for)
+        checker.nodeReady.connect(lambda n: (splash.mark_node_ready(n),
+                                  node.get_logger().info(f"{n} está listo ✅"),
+                                ))
+        checker.allReady.connect(lambda: (splash.close(), controller.view.show(), 
+                                          controller.view.raise_(), controller.view.activateWindow()))
+        checker.start()
         
         # Register callbacks in a thread-safe way
         node.register_callbacks(
@@ -473,7 +666,9 @@ def main(args=None):
             TDLAS_data_callback=controller.update_TDLAS_data,
             end_simulation_callback=controller.finish_test,
             play_simulation_callback=controller.play_simulation,
-            ptu_position_callback=controller.ptu_controller.update_ptu_position
+            ptu_position_callback=controller.ptu_controller.update_ptu_position,
+            mqtt_connection_callback=controller.set_mqtt_connection_status,
+            mqtt_bridge_status_callback=controller.set_mqtt_bridge_status
         )
         
         # Set up Qt heartbeat timer for clean shutdown and responsive UI

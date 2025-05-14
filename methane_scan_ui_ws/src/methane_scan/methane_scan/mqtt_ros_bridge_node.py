@@ -7,6 +7,7 @@ from std_msgs.msg import Bool, String
 
 
 class MqttRosBridgeNode(Node):
+    is_connected = False
     def __init__(self):
         super().__init__('mqtt_ros_bridge_node')
         self.declare_parameters_ros()
@@ -28,6 +29,7 @@ class MqttRosBridgeNode(Node):
         self.create_publishers()
         self.create_subscriptions()
         self.get_logger().info("MQTT to ROS bridge node initialized.")
+        self.is_connected = True
 
     def declare_parameters_ros(self):
         self.declare_parameter('TOPICS.ptu_ready', '/PTU_ready')
@@ -88,7 +90,20 @@ class MqttRosBridgeNode(Node):
             self.params['ptu_position'],
             10
         )
+        self.publisher_connection_status = self.create_publisher(
+            Bool,
+            '/connection_status',
+            10
+        )
+
+
+        self.timer = self.create_timer(1.0, self.publish_connection_status)
     
+    def publish_connection_status(self):
+        self.publish_connection_status_msg = Bool()
+        self.publish_connection_status_msg.data = self.is_connected
+        self.publisher_connection_status.publish(self.publish_connection_status_msg)
+
     def create_subscriptions(self):
         self.subscription_initialize_hunter = self.create_subscription(
             KeyValue,

@@ -12,6 +12,8 @@ methane_scan_node:
       play_simulation: /data_playback
       start_stop_hunter: /start_stop_value
       ptu_position: /PTU_position
+      mqtt_connection_status: /connection_status
+      mqtt_bridge_status: /mqtt_status
       
 
 

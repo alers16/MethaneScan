@@ -6,6 +6,7 @@ from methane_scan.controllers.robot_controller import RobotController
 from methane_scan.controllers.tdlas_controller import TDLASController
 from methane_scan.controllers.ptu_controller import PTUController
 from methane_scan.views.main_window import MainWindow # type: ignore
+from methane_scan.views.components.toast import Toast # type: ignore
 
 from rclpy.node import Node
 
@@ -186,7 +187,8 @@ class MainController():
             if hasattr(self.view, 'home_tab') and self.view.home_tab is not None:
                 self.view.home_tab.path_saved.connect(self.robot_controller._update_path)
                 self.view.home_tab.start_stop_signal.connect(self.pause_test)
-                self.view.home_tab.map_frame.javaScriptConsoleMessage.connect(self._show_error)
+                #self.view.home_tab.map_frame.javaScriptConsoleMessage.connect(self._show_error)
+                self.view.home_tab.logger_signal.connect(self._show_info)
             else:
                 self.node.get_logger().warn("Methane scan tab not available for event connection")
                 
@@ -477,6 +479,48 @@ class MainController():
     
     def _show_error(self, message: str):
         self.node.get_logger().error(message)
+
+    def _show_info(self, message: str):
+        self.node.get_logger().info(message)
+
+    def set_mqtt_connection_status(self, status: bool):
+        """
+        Actualiza el estado de conexión MQTT en la interfaz gráfica.
+
+        Este método se encarga de actualizar el estado de conexión MQTT
+        en la interfaz gráfica, utilizando el logger del nodo para registrar
+        un mensaje informativo o de error según corresponda.
+
+        Parámetros:
+            status (bool): Estado de conexión MQTT (True si está conectado,
+                           False si no lo está).
+        """
+        self.node.get_logger().info(f"MQTT connection status in MainController: {status}")
+        if self.view is not None and hasattr(self.view, 'titleBar') and self.view.home_tab is not None:
+            self.view.titleBar.set_mqtt_bridge_status(status)
+            if not status:
+                Toast("MQTT Bridge está desconectado", self.view, "error").show()
+        else:
+            self.node.get_logger().warn("Cannot update MQTT connection status: view is not initialized")
+
+    def set_mqtt_bridge_status(self, status: bool):
+        """
+        Actualiza el estado del puente MQTT en la interfaz gráfica.
+
+        Este método se encarga de actualizar el estado del puente MQTT
+        en la interfaz gráfica, utilizando el logger del nodo para registrar
+        un mensaje informativo o de error según corresponda.
+
+        Parámetros:
+            status (bool): Estado del puente MQTT (True si está conectado,
+                           False si no lo está).
+        """
+        if self.view is not None and hasattr(self.view, 'titleBar') and self.view.home_tab is not None:
+            self.view.titleBar.set_mqtt_status(status)
+            if not status:
+                Toast("El cliente MQTT ha perdido la conexión. Reconectando...", self.view, "error").show()
+        else:
+            self.node.get_logger().warn("Cannot update MQTT bridge status: view is not initialized")
     
     def shutdown(self):
         """

@@ -30,7 +30,7 @@ class Toast(QLabel):
         self.setStyleSheet(f"""
             padding: 10px 14px;
             border-left: 5px solid {border_col};
-            border-radius: 8px;
+            border-radius: 1px;
             font-weight: bold;
         """)
 
