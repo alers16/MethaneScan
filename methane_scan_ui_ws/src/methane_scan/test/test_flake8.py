@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Este test requiere ament_flake8, que no está disponible en este entorno. Puedes ignorar este archivo si solo quieres tests funcionales.
+
 from ament_flake8.main import main_with_errors
 import pytest
 

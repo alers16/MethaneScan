@@ -21,5 +21,6 @@ import pytest
 @pytest.mark.copyright
 @pytest.mark.linter
 def test_copyright():
+    # Este test requiere ament_copyright, que no está disponible en este entorno. Puedes ignorar este archivo si solo quieres tests funcionales.
     rc = main(argv=['.', 'test'])
     assert rc == 0, 'Found errors'
