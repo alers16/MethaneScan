@@ -1,0 +1,4 @@
+[console_scripts]
+methane_scan_node = methane_scan.methane_scan_node:main
+mqtt_ros_bridge_node = methane_scan.mqtt_ros_bridge_node:main
+

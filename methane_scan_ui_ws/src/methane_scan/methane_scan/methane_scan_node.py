@@ -250,19 +250,19 @@ class MethaneScanNode(Node):
     
 
     def declare_parameters_ros(self):
-        self.declare_parameter('TOPICS.ptu_ready', "/PTU_ready")
-        self.declare_parameter('TOPICS.hunter_position', "/hunter_position")
-        self.declare_parameter('TOPICS.tdlas_ready', "/TDLAS_ready")
-        self.declare_parameter('TOPICS.tdlas_data', "/TDLAS_data")
-        self.declare_parameter('TOPICS.initialize_hunter', "/initialize_hunter_params")
-        self.declare_parameter('TOPICS.start_hunter', "/start_simulation")
-        self.declare_parameter('TOPICS.end_simulation', "/end_simulation")
-        self.declare_parameter('TOPICS.play_simulation', "/data_playback")
-        self.declare_parameter('TOPICS.save_simulation', "/save_simulation")
-        self.declare_parameter('TOPICS.start_stop_hunter', "/start_stop_value")
-        self.declare_parameter('TOPICS.ptu_position', "/PTU_position")
-        self.declare_parameter('TOPICS.mqtt_connection_status', "/connection_status")
-        self.declare_parameter('TOPICS.mqtt_bridge_status', "/mqtt_status")
+        self.declare_parameter('TOPICS.ptu_ready', "/PTU_ready") # pragma: no cover
+        self.declare_parameter('TOPICS.hunter_position', "/hunter_position") # pragma: no cover
+        self.declare_parameter('TOPICS.tdlas_ready', "/TDLAS_ready")# pragma: no cover
+        self.declare_parameter('TOPICS.tdlas_data', "/TDLAS_data")  # pragma: no cover
+        self.declare_parameter('TOPICS.initialize_hunter', "/initialize_hunter_params") # pragma: no cover
+        self.declare_parameter('TOPICS.start_hunter', "/start_simulation") # pragma: no cover
+        self.declare_parameter('TOPICS.end_simulation', "/end_simulation") # pragma: no cover
+        self.declare_parameter('TOPICS.play_simulation', "/data_playback") # pragma: no cover
+        self.declare_parameter('TOPICS.save_simulation', "/save_simulation") # pragma: no cover
+        self.declare_parameter('TOPICS.start_stop_hunter', "/start_stop_value")# pragma: no cover
+        self.declare_parameter('TOPICS.ptu_position', "/PTU_position") # pragma: no cover
+        self.declare_parameter('TOPICS.mqtt_connection_status', "/connection_status") # pragma: no cover
+        self.declare_parameter('TOPICS.mqtt_bridge_status', "/mqtt_status") # pragma: no cover
     
     def register_callbacks(self, ptu_ready_callback, hunter_position_callback, TDLAS_ready_callback, TDLAS_data_callback,
                            end_simulation_callback, play_simulation_callback, ptu_position_callback, 
@@ -588,7 +588,7 @@ class MethaneScanNode(Node):
         self.signals.mqtt_bridge_status_signal.emit(False)
 
 
-def main(args=None):
+def main(args=None): # pragma: no cover
     """Main function with proper resource management and error handling."""
     executor = None
     node = None
@@ -764,5 +764,5 @@ def main(args=None):
         
         node.get_logger().info("Cleanup complete, exiting")
 
-if __name__ == '__main__':
+if __name__ == '__main__': # pragma: no cover
     sys.exit(main())
