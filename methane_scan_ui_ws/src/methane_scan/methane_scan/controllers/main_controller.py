@@ -153,8 +153,12 @@ class MainController():
         if self.view is None:
             self.node.get_logger().error("Cannot connect events: view isW not initialized")
             return
-        
+
         try:
+            # Ensure self.view is not None before accessing its attributes
+            if self.view is None:
+                raise AttributeError("View is not initialized")
+            
             # Navigation callbacks
             self.view.register_ptu_config_callback(self.ptu_controller.show_ptu_config)
             self.view.register_home_callback(self.show_home)
@@ -416,7 +420,7 @@ class MainController():
         
         msg = KeyValue()
         msg.key = self.node.get_parameter("TOPICS.start_stop_hunter").value
-        msg.value = state
+        msg.value = f"{state}"
         self.node.publisher_start_stop_hunter.publish(msg)
     
     def finish_test(self):

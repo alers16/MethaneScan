@@ -158,7 +158,7 @@ class RobotController:
             if path == [None]:
                 self.node.get_logger().warn("Received null path")
                 self.path = []
-                Toast("¡No se ha seleccionado ninguna trayectoria!", self.view, "warning", 3000).show()
+                Toast("¡No se ha seleccionado ninguna trayectoria!", self.view, "warning", 3000).show() # pragma: no cover
                 self.check_Robot_ready()
                 return
             if path == []:
@@ -168,35 +168,35 @@ class RobotController:
                 return
                 
             self.path = path
-            Toast(f"¡Trayectoria actualizada!", self.view, "info", 3000).show()
+            Toast(f"¡Trayectoria actualizada!", self.view, "info", 3000).show() # pragma: no cover
             self.node.get_logger().info(f"Ruta actualizada: {path}")
             self.check_Robot_ready()
         except TypeError as e:
             Toast(
             "Error: formato de trayectoria inválido",
             self.view, "error", 3000
-            ).show()
+            ).show() # pragma: no cover
             self.node.get_logger().error(f"TypeError updating path: {e}")
             traceback.print_exc()
         except ValueError as e:
             Toast(
             f"Error: valor inválido en la trayectoria ",
             self.view, "error", 3000
-            ).show()
+            ).show() # pragma: no cover
             self.node.get_logger().error(f"ValueError updating path: {e}")
             traceback.print_exc()
         except AttributeError as e:
             Toast(
             "Error interno: componente de UI no disponible al actualizar la trayectoria",
             self.view, "error", 3000
-            ).show()
+            ).show() # pragma: no cover
             self.node.get_logger().error(f"AttributeError updating path: {e}")
             traceback.print_exc()
         except Exception as e:
             Toast(
             f"Error inesperado al actualizar la trayectoria",
             self.view, "error", 3000
-            ).show()
+            ).show() # pragma: no cover
             self.node.get_logger().error(f"Unexpected error updating path: {e}")
             traceback.print_exc()
 
@@ -263,9 +263,11 @@ class RobotController:
                 
                 if not missing:
                     self.view.robot_config_widget.set_state("Operativo")
+                    return True
                 else:
                     missing_str = ", ".join(missing)
                     self.view.robot_config_widget.set_state(f"Falta: {missing_str}")
+                    return False
         except Exception as e:
             self.node.get_logger().error(f"Error checking Robot ready: {str(e)}")
             traceback.print_exc()

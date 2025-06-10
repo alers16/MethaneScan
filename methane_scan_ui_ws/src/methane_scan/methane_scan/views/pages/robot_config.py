@@ -8,7 +8,6 @@ from PyQt5.QtGui import QIcon, QPixmap, QPalette, QColor
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QDoubleValidator
 from methane_scan import qresources_rc # type: ignore
-from methane_scan.views.utils.validators import PositiveDoubleValidator
 
 class RobotConfigWidget(QWidget):
     position_saved = pyqtSignal(tuple)

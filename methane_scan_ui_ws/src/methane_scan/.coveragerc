@@ -1,0 +1,9 @@
+[run]
+omit =
+    */views/*
+    */qresources_rc.py
+    */mqtt_ros_bridge_node.py
+    */launch/*
+    */setup.py
+    */test/*
+

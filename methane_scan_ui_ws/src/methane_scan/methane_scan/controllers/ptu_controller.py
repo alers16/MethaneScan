@@ -163,6 +163,8 @@ class PTUController():
                     self.signals.ptuReady.emit(True)
                 if has_ptu_config_widget:
                     self.view.ptu_config_widget.set_state("Operativo")
+                
+                return True  # PTU is ready and configured
             elif (self.PTU_position is not None):
                 self.ptu_configured = False
                 self.node.get_logger().info("PTU solo tiene posición")
@@ -172,6 +174,8 @@ class PTUController():
                 if has_ptu_config_widget:
                     self.view.ptu_config_widget.set_state("No se ha confirmado la posición")
                 
+                return False  # PTU is not ready, but has position
+                
             else:
                 self.node.get_logger().info("PTU no configurado")
                 self.ptu_configured = False
@@ -180,6 +184,8 @@ class PTUController():
                     self.view.home_tab.set_device_status("PTU", False, ["Posición"])
                 if has_ptu_config_widget:
                     self.view.ptu_config_widget.set_state("No se ha configurado la posición")
+
+                return False  # PTU is not configured
         except Exception as e:
             self.node.get_logger().error(f"Error checking PTU ready: {str(e)}")
             traceback.print_exc()
