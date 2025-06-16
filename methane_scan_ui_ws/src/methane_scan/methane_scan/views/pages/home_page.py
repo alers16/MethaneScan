@@ -396,7 +396,6 @@ class HomePage(QWidget):
 
 
     def selectTrajectory(self, coords):
-        self.cleanSelection()
         self.map_frame.drawTrajectory(coords)
         self.btn_select_area.setText("Seleccionar Area")
         self.map_frame.disableDrawing()
