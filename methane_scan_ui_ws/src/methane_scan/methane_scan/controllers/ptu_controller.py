@@ -8,6 +8,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QLabel
 
 from ..views.components.toast import Toast
+from ..views.main_window import MainWindow
 
 class _PTUSignals(QObject):
     dialogActive = pyqtSignal(bool)
@@ -16,7 +17,7 @@ class _PTUSignals(QObject):
 
 
 class PTUController():
-    def __init__(self, node, view):
+    def __init__(self, node, view: MainWindow):
         self.node = node
         self.view = view
         self.signals = _PTUSignals()
@@ -65,8 +66,10 @@ class PTUController():
                 
                 toast = Toast("¡Posición de la PTU Actualizada!", self.view, toast_type=Toast.INFO)
                 toast.show()
+                self.view.ptu_config_widget.set_position(self.PTU_position[0], self.PTU_position[1])
                 self.view.home_tab.map_frame.drawPTUMarker(self.PTU_position[0], self.PTU_position[1])
                 self.view.home_tab.map_frame.centerMap(self.PTU_position[0], self.PTU_position[1])
+                
             else:
                 self.node.get_logger().warn("Could not update map: UI components not available")
 
@@ -172,7 +175,7 @@ class PTUController():
                 if has_home_tab:
                     self.view.home_tab.set_device_status("PTU", False, ["Confirmación"])
                 if has_ptu_config_widget:
-                    self.view.ptu_config_widget.set_state("No se ha confirmado la posición")
+                    self.view.ptu_config_widget.set_state("No se ha confirmado la detección del patrón")
                 
                 return False  # PTU is not ready, but has position
                 

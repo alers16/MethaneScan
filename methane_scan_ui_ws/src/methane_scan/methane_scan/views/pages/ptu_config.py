@@ -144,6 +144,12 @@ class PTUConfigWidget(QWidget):
         # Calculate a better size based on content
         return QSize(550, 650)
     
+    def set_position(self, lat, lng):
+        """Set the PTU position and update the UI."""
+        self.PTU_coordinates = (lat, lng)
+        self.lat_label.setText(f"Latitud: {lat}")
+        self.lon_label.setText(f"Longitud: {lng}")
+    
     def _save_position(self):
         try:
             lat = float(self.lat_edit.text())

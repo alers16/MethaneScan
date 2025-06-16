@@ -37,6 +37,7 @@ class RosQtSignals(QtCore.QObject):
 class NodeChecker(QtCore.QThread):
     nodeReady = QtCore.pyqtSignal(str)  # emite nombre del nodo cuando su topic reporta
     allReady  = QtCore.pyqtSignal()     # emite cuando todos los nodos han reportado
+    nodeError = QtCore.pyqtSignal(str)  # emite si un nodo no reporta en el tiempo esperado
 
     def __init__(self, wait_for: dict, parent=None):
         """
@@ -54,16 +55,15 @@ class NodeChecker(QtCore.QThread):
         super().__init__(parent)
         self.wait_for = wait_for
         self._ready = set()
+        self._error = set()  # nodos que no reportaron en el tiempo esperado
 
     def run(self):
         checker = rclpy.create_node('splash_node_checker')
 
-        # Para cada nodo, creamos una suscripción a su topic de estado
         for node_name, cfg in self.wait_for.items():
             topic = cfg['status_topic']
             typ   = cfg['status_type']
 
-            # Generamos una callback que capture node_name en closure
             def make_cb(name):
                 def cb(msg):
                     if name not in self._ready and msg.data:
@@ -75,15 +75,22 @@ class NodeChecker(QtCore.QThread):
                 typ,
                 topic,
                 make_cb(node_name),
-                qos_profile=10
+                10
             )
 
-        # Spin hasta que todos hayan publicado al menos una vez
+        start_time = time.time()
+        timeout = 10
         while rclpy.ok() and self._ready != set(self.wait_for.keys()):
+            if time.time() - start_time > timeout:
+                missing_nodes = set(self.wait_for.keys()) - self._ready
+                for missed in missing_nodes:
+                    self.nodeError.emit(f"{missed}")
+                    self._error.add(missed)
+
+                break
             rclpy.spin_once(checker, timeout_sec=0.2)
 
-        # Una vez listos todos:
-        time.sleep(1)  # Esperamos un segundo para que la UI se estabilice
+        time.sleep(1)
         self.allReady.emit()
         checker.destroy_node()
 
@@ -428,7 +435,7 @@ class MethaneScanNode(Node):
                 self._last_mqtt_conn = self.get_clock().now()
                 self._mqtt_conn_timed_out = False
             
-            self.signals.log_message_signal.emit('info', f'Received MQTT connection status message: {mqtt_connection}')
+            #self.signals.log_message_signal.emit('info', f'Received MQTT connection status message: {mqtt_connection}')
             self.signals.mqtt_connection_signal.emit(mqtt_connection)
         except Exception as e:
             self.signals.log_message_signal.emit('error', f'Error in MQTT connection callback: {str(e)}')
@@ -445,7 +452,7 @@ class MethaneScanNode(Node):
                 self._last_mqtt_bridge = self.get_clock().now()
                 self._mqtt_bridge_timed_out = False
             
-            self.signals.log_message_signal.emit('info', f'Received MQTT bridge status message: {mqtt_bridge_status}')
+            #self.signals.log_message_signal.emit('info', f'Received MQTT bridge status message: {mqtt_bridge_status}')
             self.signals.mqtt_bridge_status_signal.emit(mqtt_bridge_status)
         except Exception as e:
             self.signals.log_message_signal.emit('error', f'Error in MQTT bridge status callback: {str(e)}')
@@ -540,7 +547,7 @@ class MethaneScanNode(Node):
         """Qt thread handler for MQTT connection status signal."""
         try:
             if self._callbacks_registered and self._callback_mqtt_connection:
-                self.get_logger().info(f'MQTT connection status: {mqtt_connection}')
+                #self.get_logger().info(f'MQTT connection status: {mqtt_connection}')
                 self._callback_mqtt_connection(mqtt_connection)
         except Exception as e:
             self.get_logger().error(f'Error handling MQTT connection in Qt thread: {str(e)}')
@@ -656,6 +663,8 @@ def main(args=None): # pragma: no cover
                                 ))
         checker.allReady.connect(lambda: (splash.close(), controller.view.show(), 
                                           controller.view.raise_(), controller.view.activateWindow()))
+        
+        checker.nodeError.connect(lambda n: (splash.mark_node_error(n),))
         checker.start()
         
         # Register callbacks in a thread-safe way

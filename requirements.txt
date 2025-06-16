@@ -1,0 +1,10 @@
+PyQt5>=5.15
+paho-mqtt>=1.6
+numpy>=1.21
+matplotlib>=3.5
+opencv-python>=4.5
+pyyaml>=6.0
+rospkg>=1.4
+catkin-pkg>=0.5
+requests>=2.27
+

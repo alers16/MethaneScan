@@ -268,7 +268,6 @@ class HomePage(QWidget):
         tdlas_layout.setSpacing(4)
         tdlas_layout.setAlignment(Qt.AlignCenter)
 
-        # Sub-layout para la escala
         tdlas_scale_layout = QHBoxLayout()
         tdlas_scale_layout.setSpacing(5)
         tdlas_scale_layout.setAlignment(Qt.AlignCenter)
@@ -276,18 +275,19 @@ class HomePage(QWidget):
         label_0 = QLabel("0")
         label_0.setStyleSheet("font-size: 10pt; color: #DDDDDD;")
 
-        # Barra con gradiente horizontal de blanco a rojo
         color_scale_frame = QFrame()
         color_scale_frame.setFixedSize(100, 15)
         color_scale_frame.setStyleSheet("""
             QFrame {
-                background: qlineargradient(
-                    spread:pad, x1:0, y1:0.5, x2:1, y2:0.5,
-                    stop:0 rgba(255,255,255,255),
-                    stop:1 rgba(255,0,0,255)
-                );
-                border: 1px solid #444444;
-                border-radius: 4px;
+            background: qlineargradient(
+                spread:pad, x1:0, y1:0.5, x2:1, y2:0.5,
+                stop:0 rgba(0,255,0,255),
+                stop:0.33 rgba(255,255,0,255),
+                stop:0.66 rgba(255,165,0,255),
+                stop:1 rgba(255,0,0,255)
+            );
+            border: 1px solid #444444;
+            border-radius: 4px;
             }
         """)
 
@@ -297,6 +297,11 @@ class HomePage(QWidget):
         tdlas_scale_layout.addWidget(label_0)
         tdlas_scale_layout.addWidget(color_scale_frame)
         tdlas_scale_layout.addWidget(label_150)
+
+        tdlas_layout.addLayout(tdlas_scale_layout)
+        tdlas_label = QLabel("ppm·m")
+        tdlas_label.setStyleSheet("font-size: 10pt; color: #DDDDDD;")
+        tdlas_layout.addWidget(tdlas_label, 0, Qt.AlignCenter)
 
         tdlas_label = QLabel("ppm·m")
         tdlas_label.setStyleSheet("font-size: 10pt; color: #DDDDDD;")
@@ -431,7 +436,7 @@ class HomePage(QWidget):
             raise ValueError("Se requieren al menos dos puntos para generar la ruta.")
 
         path_points = "|".join(f"{coord['latitude']},{coord['longitude']}" for coord in coords)
-        path = f"path=color:0x00ffff|weight:5|{path_points}"
+        path = f"path=color:0x000000FF|weight:5|{path_points}"
 
         params = {
             "size": f"{width}x{height}",

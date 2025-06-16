@@ -59,7 +59,7 @@ class TitleBar(QWidget):
 
         # Creamos y guardamos referencias
         self.btnInicio    = makeNav("Inicio",     self.parent.switch_to_home_tab)
-        self.btnSimulacion= makeNav("Simulación", self.parent.switch_to_simulation_tab)
+        self.btnSimulacion= makeNav("Reproducción", self.parent.switch_to_simulation_tab)
 
         # Seleccionamos Inicio por defecto
         self.btnInicio.setChecked(True)

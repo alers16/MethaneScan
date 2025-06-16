@@ -79,7 +79,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.addWidget(self.home_tab)
         # Agregamos la pestaña de simulación (SimulationPage) como la segunda pestaña
         self.simulation_tab = SimulationPage(API_KEY, self)
-        self.simulation_tab.setObjectName("Simulación")
+        self.simulation_tab.setObjectName("Reproducción")
         self.tab_widget.addWidget(self.simulation_tab)
         self.tab_widget.setCurrentWidget(self.home_tab)
         # Se pueden agregar más pestañas y cambiar entre ellas mediante callbacks de la title bar

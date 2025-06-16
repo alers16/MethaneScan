@@ -91,20 +91,21 @@ class RobotController:
                 self.node.get_logger().warn("Received null hunter position")
                 return
                 
-            self.robot_position = position
-            self.node.get_logger().info(f"Posición de Hunter actualizada: {position}")
             
             # Check if view and components are available before updating UI
             if (self.view is not None and 
                 hasattr(self.view, 'home_tab') and 
                 self.view.home_tab is not None and
                 hasattr(self.view.home_tab, 'map_frame')):
-                
-                Toast(f"¡Posición de Hunter actualizada!", self.view, "info", 3000).show()
+                if self.robot_position is None:
+                    Toast(f"¡Posición de Hunter actualizada!", self.view, "info", 3000).show()
                 self.view.home_tab.set_robot_position(position)
                 self.view.robot_config_widget.set_position(position)
             else:
                 self.node.get_logger().warn("Could not update map: UI components not available")
+
+            self.robot_position = position
+            self.node.get_logger().info(f"Posición de Hunter actualizada: {position}")
             
             # Update robot ready status
             if not self.robot_configured:

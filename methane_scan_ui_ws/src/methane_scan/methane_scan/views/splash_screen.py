@@ -67,3 +67,10 @@ class SplashScreen(QWidget):
         if lbl:
             lbl.setText(f"• {name}:  ✔️")
             lbl.setStyleSheet("color: #00C853; font: 10pt 'Segoe UI';")
+    
+    def mark_node_error(self, name: str):
+        """Cambia el nodo a estado de error."""
+        lbl = self._node_labels.get(name)
+        if lbl:
+            lbl.setText(f"• {name}:  ❌")
+            lbl.setStyleSheet("color: #D32F2F; font: 10pt 'Segoe UI';")

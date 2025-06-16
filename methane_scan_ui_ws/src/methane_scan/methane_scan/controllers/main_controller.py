@@ -92,6 +92,10 @@ class MainController():
         self.process = None
         self.child = None
         self.simulation_running = False
+        self.hunter_initialized = False
+        self.mqtt_bridge_connected = True
+        self.mqtt_connection_connected = True
+
 
     def init_bag(self):
         """
@@ -191,7 +195,7 @@ class MainController():
             if hasattr(self.view, 'home_tab') and self.view.home_tab is not None:
                 self.view.home_tab.path_saved.connect(self.robot_controller._update_path)
                 self.view.home_tab.start_stop_signal.connect(self.pause_test)
-                #self.view.home_tab.map_frame.javaScriptConsoleMessage.connect(self._show_error)
+                self.view.home_tab.map_frame.javaScriptConsoleMessage.connect(self._show_error)
                 self.view.home_tab.logger_signal.connect(self._show_info)
             else:
                 self.node.get_logger().warn("Methane scan tab not available for event connection")
@@ -277,7 +281,9 @@ class MainController():
                          un 'header' con 'stamp', 'sec' y 'nanosec', y la llave
                          'average_ppmxm' para determinar la opacidad.
         """
-  
+        if not self.simulation_running:
+            self.node.get_logger().warn("Simulation is not running, cannot update TDLAS data")
+            return
         try:
             if data is None:
                 self.node.get_logger().warn("Received null TDLAS data")
@@ -301,9 +307,19 @@ class MainController():
                 self.view.home_tab is not None):
 
                 positions = [(self.ptu_controller.PTU_position[0], self.ptu_controller.PTU_position[1]), (self.robot_controller.robot_position['lat'], self.robot_controller.robot_position['lng'])]
-                opacity = 0.9 * (data.get('average_ppmxm', 0) / 150.0) + 0.1
-                
-                self.view.home_tab.map_frame.drawBeam(positions, opacity)
+                avg_ppm = data.get('average_ppmxm', 0)
+                fraction = max(0.0, min(avg_ppm / 150.0, 1.0))
+
+                if fraction < 0.33:
+                    color = "#00FF00"  # Green
+                elif fraction < 0.66:
+                    color = "#FFFF00"  # Yellow
+                elif fraction < 1.0:
+                    color = "#FFA500"  # Orange
+                else:
+                    color = "#FF0000"  # Red
+
+                self.view.home_tab.map_frame.drawBeam(positions, color)
                 self.view.home_tab.set_tdlas_data(data)
                 self.view.home_tab.set_robot_position(self.robot_controller.robot_position)
 
@@ -368,7 +384,7 @@ class MainController():
               en el log, mostrando además la traza de la excepción.
         """
         try:
-            if self.ptu_controller.PTU_position and len(self.robot_controller.path) > 0 and self.robot_controller.robot_speed > 0:
+            if not self.hunter_initialized and self.ptu_controller.PTU_position and len(self.robot_controller.path) > 0 and self.robot_controller.robot_speed > 0:
                 self.node.get_logger().info("Listo para publicar")
 
                 # Publish /initialize_hunter_params
@@ -384,6 +400,7 @@ class MainController():
                 msg.value = json_info
                 self.node.publisher_Hunter_initialized.publish(msg)
                 self.node.get_logger().info(f"Publicado /initialize_hunter_params: {json_info}")
+                self.hunter_initialized = True
         except Exception as e:
             self.node.get_logger().error(f"Error checking publish readiness: {str(e)}")
             traceback.print_exc()
@@ -458,7 +475,17 @@ class MainController():
 
                 positions = [(data.get('ptu_position')[0], data.get('ptu_position')[1]),
                               (data.get('hunter_position')['lat'], data.get('hunter_position')['lng'])]
-                opacity = 0.9 * (data.get('tdlas_data').get('average_ppmxm', 0) / 150.0) + 0.1
+                avg_ppm = data.get('tdlas_data').get('average_ppmxm', 0) 
+                fraction = max(0.0, min(avg_ppm / 150.0, 1.0))
+
+                if fraction < 0.33:
+                    color = "#00FF00"  # Green
+                elif fraction < 0.66:
+                    color = "#FFFF00"  # Yellow
+                elif fraction < 1.0:
+                    color = "#FFA500"  # Orange
+                else:
+                    color = "#FF0000"  # Red
                 robot_pos = positions[1]
 
                 if len(self.view.simulation_tab.save_positions) <= 0:
@@ -466,7 +493,7 @@ class MainController():
                     self.view.simulation_tab.map_frame.centerMap(robot_pos[0], robot_pos[1])
                 
                 self.view.simulation_tab.set_robot_position(robot_pos)
-                self.view.simulation_tab.map_frame.drawBeam(positions, opacity)
+                self.view.simulation_tab.map_frame.drawBeam(positions, color)
                 self.view.simulation_tab.add_data_row(data.get('tdlas_data'))
                 self.view.simulation_tab.set_tdlas_data(data.get('tdlas_data'))
                 self.view.simulation_tab.save_positions.append({"lat": positions[1][0], "lng": positions[1][1]})
@@ -502,8 +529,12 @@ class MainController():
         self.node.get_logger().info(f"MQTT connection status in MainController: {status}")
         if self.view is not None and hasattr(self.view, 'titleBar') and self.view.home_tab is not None:
             self.view.titleBar.set_mqtt_bridge_status(status)
-            if not status:
+            if not status and self.mqtt_connection_connected:
                 Toast("MQTT Bridge está desconectado", self.view, "error").show()
+                self.mqtt_connection_connected = False
+            elif status and not self.mqtt_connection_connected: 
+                Toast("MQTT Bridge está conectado", self.view, "info").show()
+                self.mqtt_connection_connected = True
         else:
             self.node.get_logger().warn("Cannot update MQTT connection status: view is not initialized")
 
@@ -521,8 +552,12 @@ class MainController():
         """
         if self.view is not None and hasattr(self.view, 'titleBar') and self.view.home_tab is not None:
             self.view.titleBar.set_mqtt_status(status)
-            if not status:
+            if not status and self.mqtt_bridge_connected:
+                self.mqtt_bridge_connected = False
                 Toast("El cliente MQTT ha perdido la conexión. Reconectando...", self.view, "error").show()
+            elif status and not self.mqtt_bridge_connected:
+                Toast("Cliente MQTT conectado", self.view, "info").show()
+                self.mqtt_bridge_connected = True
         else:
             self.node.get_logger().warn("Cannot update MQTT bridge status: view is not initialized")
     

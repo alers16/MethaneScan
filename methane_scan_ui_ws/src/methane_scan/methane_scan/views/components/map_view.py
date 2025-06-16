@@ -100,7 +100,7 @@ class SatelliteMap(QWebEngineView):
         self.page().runJavaScript(code, callback)
         
 
-    def drawBeam(self, coords, opacity=1.0):
+    def drawBeam(self, coords, color):
         """
         coords: lista de tuplas (lat, lng), ej: [(lat1, lng1), (lat2, lng2), ...]
         """
@@ -109,7 +109,7 @@ class SatelliteMap(QWebEngineView):
             self._pendingBeams.append(coords)
         else:
             # Ya está cargado, dibujamos directamente
-            self._execDrawBeam(coords, opacity)
+            self._execDrawBeam(coords, color)
     
     def drawTrajectory(self, coords, opacity=1.0):
         """
@@ -157,10 +157,10 @@ class SatelliteMap(QWebEngineView):
         code = "clearBeams(); clearHunterPath();"
         self.page().runJavaScript(code)
 
-    def _execDrawBeam(self, coords, opacity=1.0):
+    def _execDrawBeam(self, coords, color):
         # Llama a la función JS drawBeam(coordList)
         js_array = str([[c[0], c[1]] for c in coords])  # [[lat, lng], [lat, lng], ...]
-        code = f"drawBeam({js_array}, {opacity});"
+        code = f'drawBeam({js_array}, "{color}");'
         self.page().runJavaScript(code)
 
     def enableDrawing(self):

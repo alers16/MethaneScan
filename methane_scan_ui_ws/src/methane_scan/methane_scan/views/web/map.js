@@ -168,20 +168,20 @@ function getCorners() {
 }
 
 // Dibuja una polilínea (beam) en el mapa
-function drawBeam(coordList, opacity = 1.0) {
+function drawBeam(coordList, color = "red") {
   const path = coordList.map((c) => ({ lat: c[0], lng: c[1] }));
   const beam = new google.maps.Polyline({
     path,
-    strokeColor: "red",
-    strokeOpacity: opacity,
+    strokeColor: color,
+    strokeOpacity: 1,
     strokeWeight: 1,
   });
   beams.push(beam);
   beam.setMap(map);
 
-  beam.addListener('click', () => {
+  beam.addListener("click", () => {
     const idx = beams.indexOf(beam);
-    if(window.bridge) window.bridge.onBeamClicked(idx, path[1]);
+    if (window.bridge) window.bridge.onBeamClicked(idx, path[1]);
   });
 }
 
