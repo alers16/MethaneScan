@@ -4,14 +4,14 @@ methane_scan_node:
       ptu_ready: /PTU_ready
       hunter_position: /hunter_position
       tdlas_ready: /TDLAS_ready
-      tdlas_data: /TDLAS_data
+      tdlas_data: /falcon/reading
       initialize_hunter: /initialize_hunter_params
       start_hunter: /start_simulation
       end_simulation: /end_simulation
       save_simulation: /save_simulation
       play_simulation: /data_playback
-      start_stop_hunter: /start_stop_value
-      ptu_position: /PTU_position
+      start_stop_hunter: /start_stop_hunter
+      ptu_position: /fix
       mqtt_connection_status: /connection_status
       mqtt_bridge_status: /mqtt_status
       

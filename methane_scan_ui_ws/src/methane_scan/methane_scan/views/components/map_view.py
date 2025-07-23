@@ -154,7 +154,7 @@ class SatelliteMap(QWebEngineView):
       
     def clearBeams(self):
         """Elimina todos los beams dibujados (si existen)"""
-        code = "clearBeams(); clearHunterPath();"
+        code = "clearBeams(); clearHunterPath(); "
         self.page().runJavaScript(code)
 
     def _execDrawBeam(self, coords, color):

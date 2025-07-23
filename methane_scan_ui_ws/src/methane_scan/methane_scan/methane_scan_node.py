@@ -3,6 +3,8 @@ import threading
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String, Bool
+from sensor_msgs.msg import NavSatFix # type: ignore
+from olfaction_msgs.msg import TDLAS
 import cv2
 import numpy as np
 import configparser as cp
@@ -175,7 +177,7 @@ class MethaneScanNode(Node):
             )
 
             self.subscription_TDLAS_data = self.create_subscription(
-                String,
+                TDLAS,
                 self.get_parameter('TOPICS.tdlas_data').value,
                 self._listener_TDLAS_data_callback_safe,
                 10
@@ -196,7 +198,7 @@ class MethaneScanNode(Node):
             )
 
             self.subscription_ptu_position = self.create_subscription(
-                String,
+                NavSatFix,
                 self.get_parameter('TOPICS.ptu_position').value,
                 self._listener_ptu_position_callback_safe,
                 10
@@ -260,14 +262,14 @@ class MethaneScanNode(Node):
         self.declare_parameter('TOPICS.ptu_ready', "/PTU_ready") # pragma: no cover
         self.declare_parameter('TOPICS.hunter_position', "/hunter_position") # pragma: no cover
         self.declare_parameter('TOPICS.tdlas_ready', "/TDLAS_ready")# pragma: no cover
-        self.declare_parameter('TOPICS.tdlas_data', "/TDLAS_data")  # pragma: no cover
+        self.declare_parameter('TOPICS.tdlas_data', "/falcon/reading")  # pragma: no cover
         self.declare_parameter('TOPICS.initialize_hunter', "/initialize_hunter_params") # pragma: no cover
         self.declare_parameter('TOPICS.start_hunter', "/start_simulation") # pragma: no cover
         self.declare_parameter('TOPICS.end_simulation', "/end_simulation") # pragma: no cover
         self.declare_parameter('TOPICS.play_simulation', "/data_playback") # pragma: no cover
         self.declare_parameter('TOPICS.save_simulation', "/save_simulation") # pragma: no cover
-        self.declare_parameter('TOPICS.start_stop_hunter', "/start_stop_value")# pragma: no cover
-        self.declare_parameter('TOPICS.ptu_position', "/PTU_position") # pragma: no cover
+        self.declare_parameter('TOPICS.start_stop_hunter', "/start_stop_hunter")# pragma: no cover
+        self.declare_parameter('TOPICS.ptu_position', "/fix") # pragma: no cover
         self.declare_parameter('TOPICS.mqtt_connection_status', "/connection_status") # pragma: no cover
         self.declare_parameter('TOPICS.mqtt_bridge_status', "/mqtt_status") # pragma: no cover
     
@@ -356,7 +358,11 @@ class MethaneScanNode(Node):
             return
         
         try:
-            data = json.loads(msg.data)
+            data = {
+                'average_ppmxm': msg.average_ppmxm,
+                'average_absorption_strength': msg.average_absorption_strength,
+                'average_reflection_strength': msg.average_reflection_strength, 
+            }
             
             with self._lock:
                 self._last_TDLAS_data = data
@@ -411,7 +417,10 @@ class MethaneScanNode(Node):
             return
         
         try:
-            data = json.loads(msg.data)
+            data = {
+                'lat': msg.latitude,
+                'lng': msg.longitude,
+            }
             
             with self._lock:
                 self._last_ptu_position = data

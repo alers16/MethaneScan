@@ -23,7 +23,16 @@ function _colcon_prefix_chain_powershell_source_script {
 
 # source chained prefixes
 _colcon_prefix_chain_powershell_source_script "/opt/ros/humble\local_setup.ps1"
-_colcon_prefix_chain_powershell_source_script "/home/aromsan/cypr_ws/install\local_setup.ps1"
+_colcon_prefix_chain_powershell_source_script "/home/manuel/interbotix_MAPIR/install\local_setup.ps1"
+_colcon_prefix_chain_powershell_source_script "/home/manuel/percepcion/install\local_setup.ps1"
+_colcon_prefix_chain_powershell_source_script "/home/manuel/graficas/install\local_setup.ps1"
+_colcon_prefix_chain_powershell_source_script "/home/manuel/TDLAS-Perception-Detection/detection_ws/install\local_setup.ps1"
+_colcon_prefix_chain_powershell_source_script "/home/manuel/TDLAS-Perception-Detection/detection_ui_ws/install\local_setup.ps1"
+_colcon_prefix_chain_powershell_source_script "/home/manuel/TDLAS-Perception-Detection/Hardware/MQTT/install\local_setup.ps1"
+_colcon_prefix_chain_powershell_source_script "/home/manuel/lightwarelidar_ROS2/install\local_setup.ps1"
+_colcon_prefix_chain_powershell_source_script "/home/manuel/beca_metano/driver_TDLAS/install\local_setup.ps1"
+_colcon_prefix_chain_powershell_source_script "/home/manuel/beca_metano/hw_drivers/install\local_setup.ps1"
+_colcon_prefix_chain_powershell_source_script "/home/manuel/beca_metano/lanzamiento/install\local_setup.ps1"
 
 # source this prefix
 $env:COLCON_CURRENT_PREFIX=(Split-Path $PSCommandPath -Parent)

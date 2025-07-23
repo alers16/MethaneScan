@@ -116,13 +116,13 @@ class HomePage(QWidget):
         self.btn_clean_area= QPushButton("Limpiar Área")
         self.btn_clean_area.setDisabled(True)
         self.btn_clean_area.clicked.connect(lambda: self.cleanSelection(refresh=True))
-        btn_zoom_in = QPushButton("+")
+        self.btn_huntertrail = QPushButton("+")
         btn_zoom_out = QPushButton("-")
 
         map_buttons_layout = QHBoxLayout()
         map_buttons_layout.addWidget(self.btn_select_area)
         map_buttons_layout.addWidget(self.btn_clean_area)
-        map_buttons_layout.addWidget(btn_zoom_in)
+        map_buttons_layout.addWidget(self.btn_huntertrail)
         map_buttons_layout.addWidget(btn_zoom_out)
         map_layout.addLayout(map_buttons_layout)
 
@@ -350,7 +350,7 @@ class HomePage(QWidget):
         for w in (
             self.card_ptu, self.card_tdlas, self.card_robot,
             self.btn_select_area, self.btn_clean_area,
-            btn_zoom_in, btn_zoom_out, self.btn_iniciar,
+            self.btn_huntertrail, btn_zoom_out, self.btn_iniciar,
             self.btn_pausar, self.btn_abortar
         ):
             w.setFocusPolicy(Qt.StrongFocus)
@@ -360,8 +360,8 @@ class HomePage(QWidget):
         self.setTabOrder(self.card_tdlas,     self.card_robot)
         self.setTabOrder(self.card_robot,     self.btn_select_area)
         self.setTabOrder(self.btn_select_area,self.btn_clean_area)
-        self.setTabOrder(self.btn_clean_area, btn_zoom_in)
-        self.setTabOrder(btn_zoom_in,         btn_zoom_out)
+        self.setTabOrder(self.btn_clean_area, self.btn_huntertrail)
+        self.setTabOrder(self.btn_huntertrail,btn_zoom_out)
         self.setTabOrder(self.btn_iniciar,    self.btn_pausar)
         self.setTabOrder(self.btn_pausar,     self.btn_abortar)
    
@@ -513,12 +513,15 @@ class HomePage(QWidget):
         
 
     
-    def enableStartButtonCallback(self, callback):
+    def enableStartButtonCallback(self, callback, callback_end):
         if self.start_callback is None:
             self.btn_iniciar.setDisabled(False)
             self.btn_iniciar.setFocusPolicy(Qt.StrongFocus)
             self.start_callback = callback
             self.btn_iniciar.clicked.connect(callback)
+
+        if callback_end is not None:
+            self.btn_abortar.clicked.connect(callback_end)
 
     def enableStartButton(self):
         self.btn_iniciar.setDisabled(False)
@@ -560,8 +563,8 @@ class HomePage(QWidget):
         self.absortion_label.setText(f"Fuerza de Absorción: {data['average_absorption_strength']}")
     
     def set_robot_position(self, position):
-        lat  = position.get("lat", 0)
-        lng  = position.get("lng", 0)
+        lat  = position.get("Latitude", 0)
+        lng  = position.get("Longitude", 0)
         self.robot_lat_label.setText(f"Latitud: {lat}")
         self.robot_lon_label.setText(f"Longitud: {lng}")
         self.map_frame.drawRobotMarker(lat, lng, False)

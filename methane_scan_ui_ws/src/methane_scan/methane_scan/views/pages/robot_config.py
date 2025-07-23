@@ -185,8 +185,8 @@ class RobotConfigWidget(QWidget):
 
     def set_position(self, position):
         self.position = position
-        self.lat_label.setText(f"Latitud: {position['lat']}")
-        self.lon_label.setText(f"Longitud: {position['lng']}")
+        self.lat_label.setText(f"Latitud: {position['Latitude']}")
+        self.lon_label.setText(f"Longitud: {position['Longitude']}")
 
     def set_state(self, state):
         self.state_label.setText(f"Estado: {state}")

@@ -1,14 +1,9 @@
 mqtt_ros_bridge_node:
   ros_parameters:
     TOPICS:
-      ptu_ready: /PTU_ready
       hunter_position: /hunter_position
-      tdlas_ready: /TDLAS_ready
-      tdlas_data: /TDLAS_data
-      end_simulation: /end_simulation
-      ptu_position: /PTU_position
+      ptu_position: /fix
       mqtt2ros: /mqtt2ros
       ros2mqtt: /ros2mqtt
       initialize_hunter: /initialize_hunter_params
-      start_hunter: /start_simulation
-      start_stop_hunter: /start_stop_value
+      start_stop_hunter: /start_stop_hunter

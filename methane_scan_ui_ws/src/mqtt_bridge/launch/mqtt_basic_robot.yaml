@@ -8,5 +8,5 @@ mqtt_bridge:
     username: "csar"
     password: "mapir236"
     MQTT_topicName: ""        # main topic
-    MQTT_topics_subscribe: "PTU_ready,hunter_position,TDLAS_ready,TDLAS_data,initialize_hunter_params,start_simulation,end_simulation,save_simulation,data_playback,start_stop_value,PTU_position"  # subtopics to listen
+    MQTT_topics_subscribe: "PTU_ready,hunter_position,TDLAS_ready,TDLAS_data,initialize_hunter_params,start_simulation,end_simulation,save_simulation,data_playback,start_stop_value"  # subtopics to listen
     append_timestamp: false

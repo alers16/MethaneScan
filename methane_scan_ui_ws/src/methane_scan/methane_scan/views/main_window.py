@@ -38,6 +38,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("MethaneScan")
         self.resize(600, 400)
         self.setWindowFlags(Qt.FramelessWindowHint)
+
+        if API_KEY is None:
+            print("API_KEY is not set. Maps functionality may not work as expected.")
         
         # Cargar hojas de estilo desde archivos qss en el mismo nivel
         current_dir = os.path.dirname(__file__)

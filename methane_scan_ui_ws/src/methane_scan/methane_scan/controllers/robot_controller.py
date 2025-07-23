@@ -91,6 +91,9 @@ class RobotController:
                 self.node.get_logger().warn("Received null hunter position")
                 return
                 
+            if position == self.robot_position:
+                self.node.get_logger().info("No change in hunter position")
+                return
             
             # Check if view and components are available before updating UI
             if (self.view is not None and 

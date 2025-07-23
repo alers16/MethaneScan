@@ -28,6 +28,7 @@ class PTUController():
         self.PTU_ready = False
         self.ptu_configured = False
         self.last_ptu_position = None
+        self.first_update = True
 
     def update_ptu_position(self, position: dict):
         """
@@ -53,6 +54,7 @@ class PTUController():
         if position is None:
             self.node.get_logger().warn("Received null position for PTU")
             return
+        
             
         try:
             self.PTU_position = [position['lat'], position['lng']]
@@ -65,10 +67,13 @@ class PTUController():
                 hasattr(self.view.home_tab, 'map_frame')):
                 
                 toast = Toast("¡Posición de la PTU Actualizada!", self.view, toast_type=Toast.INFO)
-                toast.show()
+                if self.PTU_position is None:
+                    toast.show()
                 self.view.ptu_config_widget.set_position(self.PTU_position[0], self.PTU_position[1])
                 self.view.home_tab.map_frame.drawPTUMarker(self.PTU_position[0], self.PTU_position[1])
-                self.view.home_tab.map_frame.centerMap(self.PTU_position[0], self.PTU_position[1])
+                if self.first_update:
+                    self.view.home_tab.map_frame.centerMap(self.PTU_position[0], self.PTU_position[1])
+                    self.first_update = False
                 
             else:
                 self.node.get_logger().warn("Could not update map: UI components not available")

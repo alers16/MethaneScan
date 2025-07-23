@@ -306,7 +306,7 @@ class MainController():
                 hasattr(self.view, 'home_tab') and 
                 self.view.home_tab is not None):
 
-                positions = [(self.ptu_controller.PTU_position[0], self.ptu_controller.PTU_position[1]), (self.robot_controller.robot_position['lat'], self.robot_controller.robot_position['lng'])]
+                positions = [(self.ptu_controller.PTU_position[0], self.ptu_controller.PTU_position[1]), (self.robot_controller.robot_position['Latitude'], self.robot_controller.robot_position['Longitude'])]
                 avg_ppm = data.get('average_ppmxm', 0)
                 fraction = max(0.0, min(avg_ppm / 150.0, 1.0))
 
@@ -362,7 +362,7 @@ class MainController():
                 # Update UI status
                 if has_home_tab:
                     self.view.home_tab.set_ready(True)
-                    self.view.home_tab.enableStartButtonCallback(self.test_start)
+                    self.view.home_tab.enableStartButtonCallback(self.test_start, self.finish_test)
         except Exception as e:
             self.node.get_logger().error(f"Error checking all ready: {str(e)}")
             traceback.print_exc()
@@ -413,9 +413,9 @@ class MainController():
         self.simulation_running = True
         self.view.home_tab.disableStartButton()
         msg = KeyValue()
-        msg.key = self.node.get_parameter("TOPICS.start_hunter").value
-        msg.value = json.dumps({"path": self.robot_controller.path, "speed": self.robot_controller.robot_speed})
-        self.node.publisher_start_simulation.publish(msg)
+        msg.key = self.node.get_parameter("TOPICS.start_stop_hunter").value
+        msg.value = "True"
+        self.node.publisher_start_stop_hunter.publish(msg)
 
     def _record_ros2_bag(self, topic="/TDLAS_data"):
         bag_name = "experiments/tdlas_data_bag_" + time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
@@ -454,6 +454,7 @@ class MainController():
             if self.process:
                 self.process.terminate()
                 self.process.wait()
+                self.simulation_running = False
                 self.node.get_logger().info("Test finished successfully")
                 self.view.home_tab.enableStartButton()
             else:
